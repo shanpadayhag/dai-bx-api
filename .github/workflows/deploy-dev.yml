@@ -1,0 +1,92 @@
+name: Deploy dev
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [release/v3.0.0]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  AWS_REGION: ap-southeast-1
+  FUNCTION_NAME: daibx-api-dev
+  DEPLOY_ROLE_ARN: arn:aws:iam::566252491895:role/daibx-api-dev-deploy
+  FUNCTION_URL: https://dzhamj3b55fxiw5iajytqeoiii0hfuki.lambda-url.ap-southeast-1.on.aws/
+  SQLX_CLI_VERSION: 0.9.0
+
+jobs:
+  deploy:
+    name: Migrate, build and deploy
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: dev
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.99"
+          targets: aarch64-unknown-linux-gnu
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install cargo-lambda
+        run: pip install cargo-lambda==1.9.2
+
+      - name: Cache sqlx-cli
+        id: sqlx-cli-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/sqlx
+          key: sqlx-cli-${{ env.SQLX_CLI_VERSION }}-${{ runner.os }}
+
+      - name: Install sqlx-cli
+        if: steps.sqlx-cli-cache.outputs.cache-hit != 'true'
+        run: cargo install sqlx-cli@${{ env.SQLX_CLI_VERSION }} --locked --no-default-features --features postgres,rustls
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -d migrations ]; then
+            sqlx migrate run
+          else
+            echo "No migrations yet"
+          fi
+
+      - name: Build
+        env:
+          SQLX_OFFLINE: "true"
+        run: cargo lambda build --release --arm64 --output-format zip --bin daibx-api
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy
+        run: |
+          aws lambda update-function-code \
+            --function-name "$FUNCTION_NAME" \
+            --zip-file fileb://target/lambda/daibx-api/bootstrap.zip \
+            --query LastUpdateStatus --output text
+          aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
+
+      - name: Check health
+        run: curl --fail --silent --show-error --retry 3 --retry-delay 2 "${FUNCTION_URL}health"
