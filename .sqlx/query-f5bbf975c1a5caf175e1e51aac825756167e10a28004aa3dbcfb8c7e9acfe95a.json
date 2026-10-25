@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO remembered_devices (id, user_id, token_hash, user_agent, expires_at)\n             VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5::float8))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bytea",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f5bbf975c1a5caf175e1e51aac825756167e10a28004aa3dbcfb8c7e9acfe95a"
+}

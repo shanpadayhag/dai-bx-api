@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\n             SET totp_secret_encrypted = $2, totp_last_used_step = $3, updated_at = now()\n             WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4748c55b0ee197093378839b7313c3bff82b3a93bdefcdf409ea8bf60a5263d6"
+}

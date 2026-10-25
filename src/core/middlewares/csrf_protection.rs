@@ -80,6 +80,24 @@ mod tests {
             allowed_app_origins: vec![
                 AllowedOrigin::parse("http://localhost:3000").expect("origin should parse"),
             ],
+            totp_keyring: crate::core::security::totp_secret_cipher::TotpKeyring::parse(
+                "v1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+                "v1",
+            )
+            .expect("test TOTP keyring should parse"),
+            hibp_api_base_url: String::from("http://unused"),
+            app_origin: String::from("http://localhost:3000"),
+            smtp_settings: crate::core::config::smtp_settings::SmtpSettings {
+                host: String::from("127.0.0.1"),
+                port: 1025,
+                security: crate::core::config::smtp_settings::SmtpSecurity::Plain,
+                credentials: None,
+                mail_from: "DaiBX <no-reply@daibx.test>"
+                    .parse()
+                    .expect("test sender should parse"),
+            },
+            open_signups: false,
+            terms_version: String::from("test-terms-1"),
         }
     }
 

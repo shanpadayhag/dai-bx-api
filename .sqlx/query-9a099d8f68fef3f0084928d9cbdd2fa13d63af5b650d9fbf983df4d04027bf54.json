@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_tokens (id, user_id, purpose, token_hash, new_email, expires_at)\n             VALUES ($1, $2, $3, $4, $5::text::citext, now() + make_interval(secs => $6::float8))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "email_token_purpose",
+            "kind": {
+              "Enum": [
+                "verify_email",
+                "password_reset",
+                "change_email"
+              ]
+            }
+          }
+        },
+        "Bytea",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9a099d8f68fef3f0084928d9cbdd2fa13d63af5b650d9fbf983df4d04027bf54"
+}

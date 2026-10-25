@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO auth_throttles (key, failures, window_started_at, blocked_until)\n               VALUES ($1, 1, now(), NULL)\n               ON CONFLICT (key) DO UPDATE SET\n                   failures = auth_throttles.failures + 1,\n                   blocked_until = CASE\n                       WHEN auth_throttles.failures + 1 > $2 THEN now() + make_interval(\n                           secs => LEAST(\n                               $4::float8,\n                               $3::float8 * power(2, LEAST(auth_throttles.failures + 1 - $2 - 1, $5))\n                           )\n                       )\n                       ELSE auth_throttles.blocked_until\n                   END\n               RETURNING failures,\n                         CASE WHEN blocked_until > now()\n                              THEN ceil(extract(epoch FROM blocked_until - now()))::bigint\n                         END AS \"blocked_seconds\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "failures",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "auth_throttles",
+            "name": "failures"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "blocked_seconds",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Float8",
+        "Float8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "ab402dfa7ed6c2d4e50f90a1edb6fbe802d47c3b08b9c9bd3152012b07619379"
+}

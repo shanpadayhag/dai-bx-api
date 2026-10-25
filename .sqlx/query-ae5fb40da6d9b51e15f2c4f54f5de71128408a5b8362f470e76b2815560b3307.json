@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT max(ceil(extract(epoch FROM blocked_until - now())))::bigint AS \"blocked_seconds\"\n               FROM auth_throttles\n               WHERE key = ANY($1) AND blocked_until > now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blocked_seconds",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ae5fb40da6d9b51e15f2c4f54f5de71128408a5b8362f470e76b2815560b3307"
+}

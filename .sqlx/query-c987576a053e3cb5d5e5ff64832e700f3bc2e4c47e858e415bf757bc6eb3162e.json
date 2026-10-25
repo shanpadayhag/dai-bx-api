@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE remembered_devices SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c987576a053e3cb5d5e5ff64832e700f3bc2e4c47e858e415bf757bc6eb3162e"
+}

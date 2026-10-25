@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO auth_throttles (key, failures, window_started_at, blocked_until)\n               VALUES (\n                   $1, 1, now(),\n                   CASE WHEN 1 >= $2 THEN now() + make_interval(secs => $3::float8) END\n               )\n               ON CONFLICT (key) DO UPDATE SET\n                   failures = CASE\n                       WHEN auth_throttles.window_started_at <= now() - make_interval(secs => $3::float8) THEN 1\n                       ELSE auth_throttles.failures + 1\n                   END,\n                   window_started_at = CASE\n                       WHEN auth_throttles.window_started_at <= now() - make_interval(secs => $3::float8) THEN now()\n                       ELSE auth_throttles.window_started_at\n                   END,\n                   blocked_until = CASE\n                       WHEN auth_throttles.window_started_at <= now() - make_interval(secs => $3::float8) THEN\n                           CASE WHEN 1 >= $2 THEN now() + make_interval(secs => $3::float8) END\n                       WHEN auth_throttles.failures + 1 >= $2 THEN\n                           auth_throttles.window_started_at + make_interval(secs => $3::float8)\n                   END\n               RETURNING failures,\n                         CASE WHEN blocked_until > now()\n                              THEN ceil(extract(epoch FROM blocked_until - now()))::bigint\n                         END AS \"blocked_seconds\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "failures",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "auth_throttles",
+            "name": "failures"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "blocked_seconds",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "2f3f33b6c696f6ee102e2cb98f0908d12d38e1417075f76c2f6090d90e7fd18e"
+}

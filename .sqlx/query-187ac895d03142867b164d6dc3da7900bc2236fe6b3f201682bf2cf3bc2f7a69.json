@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_tokens SET used_at = now()\n             WHERE user_id = $1 AND purpose = $2 AND used_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "email_token_purpose",
+            "kind": {
+              "Enum": [
+                "verify_email",
+                "password_reset",
+                "change_email"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "187ac895d03142867b164d6dc3da7900bc2236fe6b3f201682bf2cf3bc2f7a69"
+}

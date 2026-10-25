@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id,\n                      event_type AS \"event_type: SecurityEventType\",\n                      subject_ref,\n                      ip AS \"client_ip: IpAddr\",\n                      user_agent,\n                      details\n               FROM security_events\n               WHERE subject_ref = $1\n               ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "security_events",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "event_type: SecurityEventType",
+        "type_info": {
+          "Custom": {
+            "name": "security_event_type",
+            "kind": {
+              "Enum": [
+                "sign_up",
+                "email_verified",
+                "sign_in_succeeded",
+                "sign_in_failed",
+                "mfa_set_up",
+                "recovery_code_used",
+                "recovery_codes_regenerated",
+                "password_changed",
+                "password_reset_requested",
+                "password_reset_completed",
+                "email_changed",
+                "session_revoked",
+                "signed_out_everywhere",
+                "refresh_token_reuse_detected",
+                "invite_used",
+                "account_deleted"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "security_events",
+            "name": "event_type"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "subject_ref",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "security_events",
+            "name": "subject_ref"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "client_ip: IpAddr",
+        "type_info": "Inet",
+        "origin": {
+          "Table": {
+            "table": "security_events",
+            "name": "ip"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "user_agent",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "security_events",
+            "name": "user_agent"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "details",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "security_events",
+            "name": "details"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "055d99d56591c03ce9797d71e330ada33b0587343a2f207bfe38ab41ec799c7e"
+}

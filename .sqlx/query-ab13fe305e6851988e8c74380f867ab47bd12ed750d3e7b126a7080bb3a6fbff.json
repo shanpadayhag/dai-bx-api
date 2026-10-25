@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                 (SELECT count(*)\n                  FROM recovery_codes\n                  WHERE user_id = $1 AND used_at IS NULL) AS \"recovery_codes_remaining!\",\n                 (SELECT count(*)\n                  FROM sessions\n                  WHERE user_id = $1\n                    AND revoked_at IS NULL\n                    AND last_seen_at > now() - make_interval(secs => $2::float8)\n                    AND created_at > now() - make_interval(secs => $3::float8)) AS \"active_session_count!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recovery_codes_remaining!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "active_session_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "ab13fe305e6851988e8c74380f867ab47bd12ed750d3e7b126a7080bb3a6fbff"
+}

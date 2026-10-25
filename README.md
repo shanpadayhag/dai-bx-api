@@ -101,11 +101,17 @@ The code is organised by feature (`src/features/<feature>/`), each with its own 
    createdb -h localhost -p 55440 -U postgres daibx
    ```
    Stop it with `pg_ctl -D .postgres/data stop -m fast`.
-4. Copy the environment file
+4. Copy the environment file, then replace the `TOTP_KEYS` placeholder with a fresh key. TOTP secrets are encrypted with it; old versions can stay listed (`v1:…,v2:…`) while `TOTP_KEY_CURRENT` names the one used for new secrets.
    ```sh
    cp .env.example .env
+   openssl rand -base64 32
    ```
-5. Run the tests. Each test gets its own fresh database on the local cluster.
+5. Start Mailpit in another terminal, so email tests have an inbox to deliver to:
+   ```sh
+   mailpit --smtp 127.0.0.1:1025 --listen 127.0.0.1:8025
+   ```
+   Its inbox is at http://127.0.0.1:8025. Homebrew compiles it from source on older macOS; `GOBIN=$HOME/.local/bin go install github.com/axllent/mailpit@v1.32.0` is quicker if Go is installed.
+6. Run the tests. Each test gets its own fresh database on the local cluster.
    ```sh
    cargo test
    ```
@@ -117,7 +123,7 @@ The code is organised by feature (`src/features/<feature>/`), each with its own 
 Run the API locally on port 9000:
 
 ```sh
-cargo lambda watch
+cargo lambda watch --bin daibx-api --env-file .env
 ```
 
 Then call it:
@@ -129,8 +135,44 @@ curl http://localhost:9000/health
 | Method | Path | Answers |
 | --- | --- | --- |
 | GET | `/health` | `200 {"status":"ok"}` when the database answers, `500 {"error":"internal server error"}` when it doesn't |
+| POST | `/auth/sign-up` | `{"inviteCode","name","email","password"}` → `202 {"status":"verification_email_sent"}`, also for an email that's already taken |
+| POST | `/auth/verify-email` | `{"token"}` from the emailed link → `200 {"next":"set_up_authenticator"}` and a 5-minute challenge cookie |
+| POST | `/auth/verify-email/resend` | `{"email"}` → `202 {"status":"verification_email_sent"}` whether or not the account exists; `429` after 3 an hour |
+| GET | `/auth/mfa/setup` | with the challenge cookie → `200 {"otpauthUri","manualEntryKey"}` for the authenticator app; `401` without a live setup challenge |
+| POST | `/auth/mfa/setup/confirm` | `{"code"}` → `200 {"recoveryCodes":[…10]}` shown once, plus the access and refresh cookies; `422` for a wrong code, `401` after 5 wrong codes or 5 minutes |
+| POST | `/auth/sign-in` | `{"email","password"}` → `200 {"next":"enter_code"}` (or `set_up_authenticator`, `verify_email`, or `signed_in` on a remembered device); `401 {"error":"the email or password is incorrect"}` for any wrong pair; `429` after repeated failures |
+| POST | `/auth/mfa/verify` | `{"code","rememberDevice"}` with the challenge cookie; an authenticator code or a recovery code → `200 {"next":"signed_in"}` and the session cookies, plus `"remainingRecoveryCodes"` after a recovery code |
+| POST | `/auth/refresh` | `{}` with the refresh cookie → `200 {"status":"refreshed"}` and a new cookie pair; `401` when the session is over or the token was reused |
+| POST | `/auth/sign-out` | `{}` with a session → `200 {"status":"signed_out"}`; ends this session and keeps the remembered device |
+| POST | `/auth/sign-out-everywhere` | `{}` with a session → `200 {"status":"signed_out"}`; ends every session and forgets every remembered device |
+| POST | `/auth/password-reset` | `{"email"}` → `202 {"status":"reset_email_sent"}` whether or not the account exists; `429` after 3 an hour |
+| POST | `/auth/password-reset/complete` | `{"token","password"}` → `200 {"next":"enter_code"}` and a challenge cookie; every session and remembered device ends; `422` for a used, expired or refused password |
+| GET | `/auth/session` | with the access cookie → `200 {"user":{"name","email","accentColor","theme"}}`; `401` when signed out, idle 7 days, or 30 days after sign-in |
+| GET | `/account` | with a session → `200 {"name","email","accentColor","theme","security":{"recoveryCodesRemaining","activeSessionCount"}}` |
+| PATCH | `/account` | any of `{"name","accentColor","theme"}` → `200` with the updated profile; `422` for an unknown color or theme |
+| POST | `/account/password` | `{"currentPassword","newPassword"}` → `200 {"status":"password_changed"}`; ends every other session; `422` for a wrong current password |
+| POST | `/account/email` | `{"password","code","newEmail"}` → `202 {"status":"confirmation_email_sent"}` and a link to the new address |
+| POST | `/account/recovery-codes` | `{"password","code"}` → `200 {"recoveryCodes":[…10]}`; every earlier code stops working |
+| POST | `/account/authenticator` | `{"password","code"}` (a recovery code works) → `200 {"next":"set_up_authenticator"}` and a challenge cookie for `GET /auth/mfa/setup` |
+| POST | `/account/authenticator/confirm` | `{"code"}` from the new app → `200 {"status":"authenticator_replaced"}`; ends the other sessions and every remembered device |
+| POST | `/account/delete` | `{"password","code","confirmation":"delete my account"}` → `200 {"status":"account_deleted"}`; deletes everything the account owns |
+| POST | `/account/email/confirm` | `{"token"}`, no session needed → `200 {"status":"email_changed"}`; `422` for a used or expired link |
 
 Every error comes back as `{ "error": "<safe message>" }`.
+
+### Invites
+
+Sign-up needs an invite code while DaiBX is invite-only. Create one with the `invite` CLI, which connects as the restricted `invite_operator` database role: it can add and read invites, and nothing else.
+
+1. Once per database, give the role a password as the database owner (in Supabase, the SQL editor):
+   ```sql
+   ALTER ROLE invite_operator WITH PASSWORD 'a long random password';
+   ```
+2. Create a code with that role's connection string. On Supabase, use the session pooler address with the user `invite_operator.<project-ref>`:
+   ```sh
+   INVITE_DATABASE_URL='postgresql://invite_operator.<project-ref>:<password>@<pooler-host>:5432/postgres' cargo run --bin invite -- create
+   ```
+   It prints a code like `K7QM-2XRD-9FTB-0011`, valid for one sign-up within 7 days. Only its SHA-256 is stored, so this is the only time it's shown.
 
 Every request that changes something (anything but GET, HEAD and OPTIONS) must come from the web app and carry JSON:
 
@@ -140,6 +182,8 @@ Every request that changes something (anything but GET, HEAD and OPTIONS) must c
 `APP_ORIGINS` is a comma-separated list. One entry may contain a single `*`, which matches letters, digits and hyphens only, for example `https://dai-bx-web-*-shans-projects-a71057cb.vercel.app` for Vercel preview deployments.
 
 The API sends no CORS headers: the browser reaches it through the web app's `/backend` rewrite, on the same origin.
+
+New passwords are checked against Have I Been Pwned's range API (only the first 5 characters of the password's SHA-1 leave the server). `HIBP_API_BASE_URL` overrides the default `https://api.pwnedpasswords.com`, which tests use to point at a local fake. If the service is slow or down, the check is skipped and logged, and the local rules still apply.
 
 Before committing, run the same checks as CI:
 

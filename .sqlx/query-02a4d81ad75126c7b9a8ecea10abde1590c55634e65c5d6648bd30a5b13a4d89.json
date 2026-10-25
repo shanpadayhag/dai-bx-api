@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT totp_secret_encrypted AS sealed_totp_secret, totp_last_used_step AS last_used_step\n             FROM users\n             WHERE id = $1\n             FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sealed_totp_secret",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "totp_secret_encrypted"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "last_used_step",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "totp_last_used_step"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "02a4d81ad75126c7b9a8ecea10abde1590c55634e65c5d6648bd30a5b13a4d89"
+}

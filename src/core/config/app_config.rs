@@ -1,9 +1,21 @@
 use std::env;
 
+use crate::core::config::smtp_settings::{SmtpSettings, SmtpSettingsError};
+use crate::core::security::totp_secret_cipher::{TotpKeyring, TotpKeyringError};
+
+pub const DEFAULT_HIBP_API_BASE_URL: &str = "https://api.pwnedpasswords.com";
+pub const DEFAULT_TERMS_VERSION: &str = "draft-2026-10";
+
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub database_url: String,
     pub allowed_app_origins: Vec<AllowedOrigin>,
+    pub totp_keyring: TotpKeyring,
+    pub hibp_api_base_url: String,
+    pub app_origin: String,
+    pub smtp_settings: SmtpSettings,
+    pub open_signups: bool,
+    pub terms_version: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,6 +30,10 @@ pub enum AppConfigError {
     Missing(&'static str),
     #[error("{0} is not a valid app origin")]
     InvalidOrigin(String),
+    #[error(transparent)]
+    TotpKeyring(#[from] TotpKeyringError),
+    #[error(transparent)]
+    Smtp(#[from] SmtpSettingsError),
 }
 
 impl AppConfig {
@@ -25,6 +41,24 @@ impl AppConfig {
         Ok(Self {
             database_url: read_required_variable("DATABASE_URL")?,
             allowed_app_origins: parse_allowed_origins(&read_required_variable("APP_ORIGINS")?)?,
+            totp_keyring: TotpKeyring::parse(
+                &read_required_variable("TOTP_KEYS")?,
+                &read_required_variable("TOTP_KEY_CURRENT")?,
+            )?,
+            hibp_api_base_url: env::var("HIBP_API_BASE_URL")
+                .ok()
+                .filter(|base_url| !base_url.trim().is_empty())
+                .unwrap_or_else(|| String::from(DEFAULT_HIBP_API_BASE_URL)),
+            app_origin: parse_app_origin(&read_required_variable("APP_ORIGIN")?)?,
+            smtp_settings: SmtpSettings::from_variables(|variable_name| {
+                env::var(variable_name).ok()
+            })?,
+            open_signups: env::var("OPEN_SIGNUPS")
+                .is_ok_and(|open_signups| open_signups.trim() == "true"),
+            terms_version: env::var("TERMS_VERSION")
+                .ok()
+                .filter(|terms_version| !terms_version.trim().is_empty())
+                .unwrap_or_else(|| String::from(DEFAULT_TERMS_VERSION)),
         })
     }
 
@@ -71,6 +105,13 @@ fn is_wildcard_segment(wildcard_segment: &str) -> bool {
         && wildcard_segment
             .bytes()
             .all(|segment_byte| segment_byte.is_ascii_alphanumeric() || segment_byte == b'-')
+}
+
+fn parse_app_origin(origin_text: &str) -> Result<String, AppConfigError> {
+    match AllowedOrigin::parse(origin_text)? {
+        AllowedOrigin::Exact(exact_origin) => Ok(exact_origin),
+        AllowedOrigin::Pattern { .. } => Err(AppConfigError::InvalidOrigin(origin_text.to_owned())),
+    }
 }
 
 fn parse_allowed_origins(origins_text: &str) -> Result<Vec<AllowedOrigin>, AppConfigError> {

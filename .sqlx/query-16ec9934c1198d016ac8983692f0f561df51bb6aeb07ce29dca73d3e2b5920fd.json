@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name,\n                      email::text AS \"email!\",\n                      accent_color AS \"accent_color: AccentColor\",\n                      theme AS \"theme: ThemeMode\"\n               FROM users\n               WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "email!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "accent_color: AccentColor",
+        "type_info": {
+          "Custom": {
+            "name": "accent_color",
+            "kind": {
+              "Enum": [
+                "blue",
+                "indigo",
+                "teal",
+                "violet",
+                "graphite"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "accent_color"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "theme: ThemeMode",
+        "type_info": {
+          "Custom": {
+            "name": "theme_mode",
+            "kind": {
+              "Enum": [
+                "light",
+                "dark",
+                "system"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "theme"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "16ec9934c1198d016ac8983692f0f561df51bb6aeb07ce29dca73d3e2b5920fd"
+}

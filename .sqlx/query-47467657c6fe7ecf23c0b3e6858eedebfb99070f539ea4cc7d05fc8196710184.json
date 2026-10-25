@@ -1,0 +1,110 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\n               SET name = coalesce($2, name),\n                   accent_color = coalesce($3, accent_color),\n                   theme = coalesce($4, theme),\n                   updated_at = now()\n               WHERE id = $1\n               RETURNING name,\n                         email::text AS \"email!\",\n                         accent_color AS \"accent_color: AccentColor\",\n                         theme AS \"theme: ThemeMode\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "email!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "accent_color: AccentColor",
+        "type_info": {
+          "Custom": {
+            "name": "accent_color",
+            "kind": {
+              "Enum": [
+                "blue",
+                "indigo",
+                "teal",
+                "violet",
+                "graphite"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "accent_color"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "theme: ThemeMode",
+        "type_info": {
+          "Custom": {
+            "name": "theme_mode",
+            "kind": {
+              "Enum": [
+                "light",
+                "dark",
+                "system"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "theme"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "accent_color",
+            "kind": {
+              "Enum": [
+                "blue",
+                "indigo",
+                "teal",
+                "violet",
+                "graphite"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "theme_mode",
+            "kind": {
+              "Enum": [
+                "light",
+                "dark",
+                "system"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "47467657c6fe7ecf23c0b3e6858eedebfb99070f539ea4cc7d05fc8196710184"
+}

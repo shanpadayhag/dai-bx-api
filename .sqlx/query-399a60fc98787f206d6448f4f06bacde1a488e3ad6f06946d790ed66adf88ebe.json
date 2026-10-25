@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\n             SET email = $2::text::citext,\n                 email_verified_at = coalesce(email_verified_at, now()),\n                 updated_at = now()\n             WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "399a60fc98787f206d6448f4f06bacde1a488e3ad6f06946d790ed66adf88ebe"
+}

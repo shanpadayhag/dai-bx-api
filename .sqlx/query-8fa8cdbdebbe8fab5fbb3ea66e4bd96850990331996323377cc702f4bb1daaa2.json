@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO session_tokens (id, session_id, kind, token_hash, expires_at)\n               SELECT $1, sessions.id, $3, $4,\n                      least(now() + make_interval(secs => $5::float8),\n                            sessions.created_at + make_interval(secs => $6::float8))\n               FROM sessions\n               WHERE sessions.id = $2\n               RETURNING ceil(extract(epoch FROM expires_at - now()))::bigint AS \"valid_for_seconds!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "valid_for_seconds!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "session_token_kind",
+            "kind": {
+              "Enum": [
+                "access",
+                "refresh"
+              ]
+            }
+          }
+        },
+        "Bytea",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8fa8cdbdebbe8fab5fbb3ea66e4bd96850990331996323377cc702f4bb1daaa2"
+}

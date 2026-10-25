@@ -3,6 +3,8 @@ use std::time::Duration;
 
 use daibx_api::app;
 use daibx_api::core::config::app_config::AppConfig;
+use daibx_api::core::http_client::build_http_client;
+use daibx_api::core::mail_transport::build_mail_transport;
 use daibx_api::core::state::AppState;
 use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber::EnvFilter;
@@ -24,9 +26,12 @@ async fn main() -> Result<(), lambda_http::Error> {
         .await
         .expect("the database must be reachable at startup");
 
+    let mail_transport = build_mail_transport(&app_config.smtp_settings);
     let app_state = AppState {
         db_pool,
         app_config: Arc::new(app_config),
+        http_client: build_http_client(),
+        mail_transport,
     };
     lambda_http::run(app(app_state)).await
 }

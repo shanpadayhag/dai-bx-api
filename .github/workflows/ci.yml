@@ -53,6 +53,9 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
+      - name: Build the binaries without test dependencies
+        run: cargo check --bins --locked
+
       - name: Lint
         run: cargo clippy --all-targets --locked -- -D warnings
 

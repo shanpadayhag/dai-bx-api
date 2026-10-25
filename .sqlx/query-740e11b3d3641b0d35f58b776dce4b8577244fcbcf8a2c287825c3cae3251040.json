@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                   SELECT 1 FROM invites\n                   WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now()\n               ) AS \"is_usable!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_usable!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "740e11b3d3641b0d35f58b776dce4b8577244fcbcf8a2c287825c3cae3251040"
+}

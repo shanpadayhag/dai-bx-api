@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO invites (id, code_hash, expires_at)\n               VALUES ($1, $2, now() + make_interval(secs => $3::float8))\n               RETURNING to_char(expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI') || ' UTC' AS \"expires_at_utc!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "expires_at_utc!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "26c4988388e92c052729de245b854ddff6c95a84cd6e07a2c9a0771e9a3f49da"
+}
