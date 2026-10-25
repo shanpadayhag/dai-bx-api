@@ -131,65 +131,8 @@ async fn sign_out_revokes_this_session_and_keeps_the_remembered_device(db_pool: 
 }
 
 #[sqlx::test]
-async fn sign_out_everywhere_revokes_every_session_and_remembered_device(db_pool: PgPool) {
-    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
-    let remembered_sign_in = sign_in_remembering_the_device(
-        &db_pool,
-        &signed_in_person.email,
-        &signed_in_person.totp_secret,
-    )
-    .await;
-
-    let response = post_with_cookies(
-        &db_pool,
-        "/auth/sign-out-everywhere",
-        &signed_in_person.session_cookies,
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let set_cookies = set_cookie_headers(&response);
-    for cookie_name in [
-        "__Host-daibx_access",
-        "__Host-daibx_refresh",
-        "__Host-daibx_device",
-    ] {
-        assert!(find_set_cookie(&set_cookies, cookie_name).contains("Max-Age=0"));
-    }
-    assert_eq!(
-        response_json(response).await,
-        json!({ "status": "signed_out" })
-    );
-    for session_cookies in [
-        &signed_in_person.session_cookies,
-        &remembered_sign_in.session_cookies,
-    ] {
-        assert_eq!(
-            session_status(&db_pool, session_cookies).await,
-            StatusCode::UNAUTHORIZED
-        );
-    }
-    let device_sign_in = sign_in(
-        &db_pool,
-        &signed_in_person.email,
-        STRONG_PASSWORD,
-        &remembered_sign_in.device_cookie,
-    )
-    .await;
-    assert_eq!(
-        response_json(device_sign_in).await,
-        json!({ "next": "enter_code" })
-    );
-    assert!(
-        recorded_event_types(&db_pool, &signed_in_person.email)
-            .await
-            .contains(&SecurityEventType::SignedOutEverywhere)
-    );
-}
-
-#[sqlx::test]
 async fn sign_out_returns_401_without_a_session(db_pool: PgPool) {
-    for request_path in ["/auth/sign-out", "/auth/sign-out-everywhere"] {
+    for request_path in ["/auth/sign-out", "/account/sessions/end-all"] {
         assert_eq!(
             post_with_cookies(&db_pool, request_path, "").await.status(),
             StatusCode::UNAUTHORIZED

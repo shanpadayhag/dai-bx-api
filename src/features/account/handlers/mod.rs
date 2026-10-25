@@ -1,4 +1,5 @@
 pub mod get_account;
+pub mod get_account_sessions;
 pub mod patch_account;
 pub mod post_account_authenticator;
 pub mod post_account_authenticator_confirm;
@@ -7,3 +8,5 @@ pub mod post_account_email;
 pub mod post_account_email_confirm;
 pub mod post_account_password;
 pub mod post_account_recovery_codes;
+pub mod post_account_sessions_end;
+pub mod post_account_sessions_end_all;

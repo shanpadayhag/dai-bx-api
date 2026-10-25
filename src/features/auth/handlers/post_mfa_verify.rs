@@ -14,6 +14,7 @@ use crate::features::auth_challenges::entities::auth_challenge::AUTH_CHALLENGE_C
 use crate::features::remembered_devices::entities::remembered_device::{
     REMEMBERED_DEVICE_COOKIE_NAME, REMEMBERED_DEVICE_VALID_FOR_SECONDS,
 };
+use crate::features::sessions::entities::presented_session::PresentedSession;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +27,7 @@ pub struct VerifySignInCodeRequest {
 pub async fn post_mfa_verify(
     State(app_state): State<AppState>,
     request_context: RequestContext,
+    presented_session: PresentedSession,
     request_headers: HeaderMap,
     Json(verify_request): Json<VerifySignInCodeRequest>,
 ) -> Result<Response, AppError> {
@@ -39,6 +41,7 @@ pub async fn post_mfa_verify(
                 should_remember_device: verify_request.remember_device,
             },
             &request_context,
+            &presented_session,
         )
         .await?;
     let [access_cookie, refresh_cookie] = verified_sign_in.session_tokens.to_set_cookie_values();

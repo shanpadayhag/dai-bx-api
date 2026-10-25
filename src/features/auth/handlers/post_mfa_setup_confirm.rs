@@ -11,6 +11,7 @@ use crate::core::state::AppState;
 use crate::features::auth::actions::confirm_authenticator_setup::ConfirmAuthenticatorSetup;
 use crate::features::auth::responses::recovery_codes_response::RecoveryCodesResponse;
 use crate::features::auth_challenges::entities::auth_challenge::AUTH_CHALLENGE_COOKIE_NAME;
+use crate::features::sessions::entities::presented_session::PresentedSession;
 
 #[derive(Deserialize)]
 pub struct ConfirmAuthenticatorSetupRequest {
@@ -20,6 +21,7 @@ pub struct ConfirmAuthenticatorSetupRequest {
 pub async fn post_mfa_setup_confirm(
     State(app_state): State<AppState>,
     request_context: RequestContext,
+    presented_session: PresentedSession,
     request_headers: HeaderMap,
     Json(confirm_request): Json<ConfirmAuthenticatorSetupRequest>,
 ) -> Result<Response, AppError> {
@@ -30,6 +32,7 @@ pub async fn post_mfa_setup_confirm(
             challenge_token,
             confirm_request.code.trim(),
             &request_context,
+            &presented_session,
         )
         .await?;
     let [access_cookie, refresh_cookie] = confirmed_setup.session_tokens.to_set_cookie_values();

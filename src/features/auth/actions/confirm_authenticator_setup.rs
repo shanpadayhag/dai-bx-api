@@ -16,6 +16,7 @@ use crate::features::security_log::entities::security_event::{
     NewSecurityEvent, SecurityEventDetails, SecurityEventType,
 };
 use crate::features::sessions::actions::create_session::CreateSession;
+use crate::features::sessions::entities::presented_session::PresentedSession;
 use crate::features::sessions::entities::session::IssuedSessionTokens;
 use crate::features::users::actions::enable_mfa::EnableMfa;
 use crate::features::users::actions::find_user_by_id::FindUserById;
@@ -57,6 +58,7 @@ impl<'a> ConfirmAuthenticatorSetup<'a> {
         challenge_token: &str,
         entered_code: &str,
         request_context: &RequestContext,
+        presented_session: &PresentedSession,
     ) -> Result<ConfirmedAuthenticatorSetup, AuthError> {
         let is_well_formed_code = entered_code.len() == TOTP_DIGIT_COUNT
             && entered_code
@@ -123,7 +125,12 @@ impl<'a> ConfirmAuthenticatorSetup<'a> {
             .await?;
         let session_tokens = self
             .create_session
-            .execute(&mut confirm_transaction, set_up_user.id, request_context)
+            .execute(
+                &mut confirm_transaction,
+                set_up_user.id,
+                request_context,
+                presented_session,
+            )
             .await?;
         self.record_security_event
             .execute(

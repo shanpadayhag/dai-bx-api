@@ -2,24 +2,36 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::header;
 use axum::response::{AppendHeaders, IntoResponse, Response};
+use serde::Deserialize;
+use zeroize::Zeroizing;
 
 use crate::core::cookie::build_expired_host_cookie;
 use crate::core::error::AppError;
 use crate::core::request_context::RequestContext;
 use crate::core::state::AppState;
-use crate::features::auth::actions::sign_out_everywhere::SignOutEverywhere;
-use crate::features::auth::responses::status_response::StatusResponse;
+use crate::features::account::actions::end_all_sessions::EndAllSessions;
+use crate::features::account::responses::status_response::StatusResponse;
 use crate::features::remembered_devices::entities::remembered_device::REMEMBERED_DEVICE_COOKIE_NAME;
 use crate::features::sessions::entities::current_session::CurrentSession;
 use crate::features::sessions::entities::session::{ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME};
 
-pub async fn post_sign_out_everywhere(
+#[derive(Deserialize)]
+pub struct EndAllSessionsRequest {
+    pub password: String,
+}
+
+pub async fn post_account_sessions_end_all(
     State(app_state): State<AppState>,
     current_session: CurrentSession,
     request_context: RequestContext,
+    Json(end_all_request): Json<EndAllSessionsRequest>,
 ) -> Result<Response, AppError> {
-    SignOutEverywhere::new(&app_state)
-        .execute(current_session, &request_context)
+    EndAllSessions::new(&app_state)
+        .execute(
+            current_session,
+            Zeroizing::new(end_all_request.password),
+            &request_context,
+        )
         .await?;
     Ok((
         AppendHeaders(

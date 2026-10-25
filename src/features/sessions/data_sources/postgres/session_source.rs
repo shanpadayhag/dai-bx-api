@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::features::sessions::entities::session::{
     ActiveSession, PresentedRefreshToken, SessionTokenKind,
 };
+use crate::features::sessions::entities::session_summary::SessionSummary;
 
 #[derive(Default)]
 pub struct PostgresSessionSource;
@@ -168,6 +169,73 @@ impl PostgresSessionSource {
         .execute(executor)
         .await?
         .rows_affected())
+    }
+
+    pub async fn revoke_by_token_hashes(
+        &self,
+        executor: impl PgExecutor<'_>,
+        token_hashes: &[Vec<u8>],
+        revoked_reason: &str,
+    ) -> Result<u64, sqlx::Error> {
+        Ok(sqlx::query!(
+            "UPDATE sessions
+             SET revoked_at = now(), revoked_reason = $2
+             WHERE revoked_at IS NULL
+               AND id IN (SELECT session_id FROM session_tokens WHERE token_hash = ANY($1))",
+            token_hashes,
+            revoked_reason,
+        )
+        .execute(executor)
+        .await?
+        .rows_affected())
+    }
+
+    pub async fn list_live_for_user(
+        &self,
+        executor: impl PgExecutor<'_>,
+        user_id: Uuid,
+        idle_limit_seconds: i64,
+        absolute_limit_seconds: i64,
+    ) -> Result<Vec<SessionSummary>, sqlx::Error> {
+        sqlx::query_as!(
+            SessionSummary,
+            r#"SELECT id,
+                      to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "created_at!",
+                      to_char(last_seen_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "last_seen_at!",
+                      user_agent
+               FROM sessions
+               WHERE user_id = $1
+                 AND revoked_at IS NULL
+                 AND last_seen_at > now() - make_interval(secs => $2::float8)
+                 AND created_at > now() - make_interval(secs => $3::float8)
+               ORDER BY last_seen_at DESC, id DESC"#,
+            user_id,
+            idle_limit_seconds as f64,
+            absolute_limit_seconds as f64,
+        )
+        .fetch_all(executor)
+        .await
+    }
+
+    pub async fn revoke_owned(
+        &self,
+        executor: impl PgExecutor<'_>,
+        session_id: Uuid,
+        user_id: Uuid,
+        revoked_reason: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let updated_rows = sqlx::query!(
+            "UPDATE sessions
+             SET revoked_at = now(), revoked_reason = $3
+             WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL",
+            session_id,
+            user_id,
+            revoked_reason,
+        )
+        .execute(executor)
+        .await?
+        .rows_affected();
+        Ok(updated_rows == 1)
     }
 
     pub async fn revoke_all_for_user_except(

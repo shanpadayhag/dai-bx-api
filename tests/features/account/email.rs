@@ -5,9 +5,10 @@ use serde_json::json;
 use sqlx::PgPool;
 
 use crate::support::{
-    STRONG_PASSWORD, SignedInPerson, build_test_app, count_emails_after_a_pause, get_with_cookies,
-    latest_link_token, next_totp_code, post_json, post_json_with_cookies, recorded_event_types,
-    response_json, sign_in, sign_up_with_authenticator, unique_email,
+    STRONG_PASSWORD, SignedInPerson, build_test_app, count_emails_after_a_pause,
+    create_invite_code, get_with_cookies, latest_link_token, next_totp_code, post_json,
+    post_json_with_cookies, recorded_event_types, response_json, sign_in,
+    sign_up_with_authenticator, unique_email,
 };
 
 async fn request_email_change(
@@ -181,6 +182,45 @@ async fn change_email_answers_a_taken_address_the_same_way_and_sends_nothing(db_
         json!({ "status": "confirmation_email_sent" })
     );
     assert_eq!(count_emails_after_a_pause(&other_person.email).await, 1);
+}
+
+#[sqlx::test]
+async fn confirming_returns_409_when_the_address_was_taken_in_the_meantime(db_pool: PgPool) {
+    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
+    let new_email = unique_email();
+    request_email_change(
+        &db_pool,
+        &signed_in_person,
+        STRONG_PASSWORD,
+        &next_totp_code(&signed_in_person.totp_secret),
+        &new_email,
+    )
+    .await;
+    let link_token = latest_link_token(&new_email, 1).await;
+    let sign_up_response = post_json(
+        build_test_app(db_pool.clone()),
+        "/auth/sign-up",
+        json!({
+            "inviteCode": create_invite_code(&db_pool).await,
+            "name": "Someone Else",
+            "email": new_email,
+            "password": STRONG_PASSWORD,
+        }),
+    )
+    .await;
+    assert_eq!(sign_up_response.status(), StatusCode::ACCEPTED);
+
+    let response = confirm_email_change(&db_pool, &link_token).await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        response_json(response).await["error"],
+        "that email address is already in use"
+    );
+    assert_eq!(
+        account_email(&db_pool, &signed_in_person).await,
+        signed_in_person.email
+    );
 }
 
 #[sqlx::test]

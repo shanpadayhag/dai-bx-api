@@ -8,6 +8,5 @@ pub mod post_refresh;
 pub mod post_resend_verification_email;
 pub mod post_sign_in;
 pub mod post_sign_out;
-pub mod post_sign_out_everywhere;
 pub mod post_sign_up;
 pub mod post_verify_email;

@@ -30,6 +30,18 @@ impl StatusResponse {
         }
     }
 
+    pub fn session_ended() -> Self {
+        Self {
+            status: "session_ended",
+        }
+    }
+
+    pub fn signed_out() -> Self {
+        Self {
+            status: "signed_out",
+        }
+    }
+
     pub fn account_deleted() -> Self {
         Self {
             status: "account_deleted",

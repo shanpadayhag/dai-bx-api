@@ -5,8 +5,8 @@ use sqlx::PgPool;
 
 use crate::support::{
     build_test_app, cookie_pair, find_set_cookie, get_with_cookies, next_totp_code,
-    recorded_event_types, response_json, set_cookie_headers, sign_in_to_code_step,
-    sign_up_with_authenticator, verify_code,
+    post_json_with_cookies, recorded_event_types, response_json, session_cookie_header,
+    set_cookie_headers, sign_in_to_code_step, sign_up_with_authenticator, verify_code,
 };
 
 #[sqlx::test]
@@ -135,6 +135,35 @@ async fn verify_remembers_the_device_for_30_days_when_ticked(db_pool: PgPool) {
             device_cookie.contains(cookie_attribute),
             "missing {cookie_attribute} in {device_cookie}"
         );
+    }
+}
+
+#[sqlx::test]
+async fn signing_in_again_ends_the_session_this_browser_already_had(db_pool: PgPool) {
+    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
+    let challenge_cookie = sign_in_to_code_step(&db_pool, &signed_in_person.email).await;
+
+    let response = post_json_with_cookies(
+        build_test_app(db_pool.clone()),
+        "/auth/mfa/verify",
+        json!({ "code": next_totp_code(&signed_in_person.totp_secret), "rememberDevice": false }),
+        &format!("{}; {challenge_cookie}", signed_in_person.session_cookies),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let new_session_cookies = session_cookie_header(&set_cookie_headers(&response));
+    for (session_cookies, expected_status) in [
+        (&signed_in_person.session_cookies, StatusCode::UNAUTHORIZED),
+        (&new_session_cookies, StatusCode::OK),
+    ] {
+        let session_response = get_with_cookies(
+            build_test_app(db_pool.clone()),
+            "/auth/session",
+            session_cookies,
+        )
+        .await;
+        assert_eq!(session_response.status(), expected_status);
     }
 }
 

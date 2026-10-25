@@ -8,7 +8,6 @@ pub mod resend_verification_email;
 pub mod show_authenticator_setup;
 pub mod sign_in;
 pub mod sign_out;
-pub mod sign_out_everywhere;
 pub mod sign_up;
 pub mod verify_email;
 pub mod verify_sign_in_code;

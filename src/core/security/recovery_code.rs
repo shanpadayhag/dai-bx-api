@@ -3,15 +3,9 @@ use zeroize::Zeroizing;
 
 use crate::core::security::constant_time::bytes_match;
 use crate::core::security::crockford_code::{generate_crockford_code, normalize_crockford_code};
-use crate::core::security::random_bytes::generate_random_bytes;
 
 pub const RECOVERY_CODE_COUNT: usize = 10;
 pub const RECOVERY_CODE_SYMBOL_COUNT: usize = 12;
-
-pub struct RecoveryCodeHash {
-    pub salt: [u8; 16],
-    pub code_hash: [u8; 32],
-}
 
 pub fn generate_recovery_code() -> Zeroizing<String> {
     generate_crockford_code(RECOVERY_CODE_SYMBOL_COUNT)
@@ -21,15 +15,7 @@ pub fn normalize_recovery_code(entered_code: &str) -> Option<Zeroizing<String>> 
     normalize_crockford_code(entered_code, RECOVERY_CODE_SYMBOL_COUNT)
 }
 
-pub fn hash_recovery_code(normalized_code: &str) -> RecoveryCodeHash {
-    let salt = generate_random_bytes::<16>();
-    RecoveryCodeHash {
-        salt,
-        code_hash: hash_with_salt(normalized_code, &salt),
-    }
-}
-
-pub fn recovery_code_matches(normalized_code: &str, salt: &[u8], code_hash: &[u8]) -> bool {
+pub fn legacy_recovery_code_matches(normalized_code: &str, salt: &[u8], code_hash: &[u8]) -> bool {
     bytes_match(&hash_with_salt(normalized_code, salt), code_hash)
 }
 
@@ -90,25 +76,25 @@ mod tests {
     }
 
     #[test]
-    fn matches_a_code_only_with_its_own_salt_and_hash() {
-        let first_code_hash = hash_recovery_code("K7QM2XRD9FTB");
-        let second_code_hash = hash_recovery_code("K7QM2XRD9FTB");
+    fn matches_a_legacy_code_only_with_its_own_salt_and_hash() {
+        let first_salt = [1_u8; 16];
+        let second_salt = [2_u8; 16];
+        let first_code_hash = hash_with_salt("K7QM2XRD9FTB", &first_salt);
 
-        assert_ne!(first_code_hash.salt, second_code_hash.salt);
-        assert!(recovery_code_matches(
+        assert!(legacy_recovery_code_matches(
             "K7QM2XRD9FTB",
-            &first_code_hash.salt,
-            &first_code_hash.code_hash
+            &first_salt,
+            &first_code_hash
         ));
-        assert!(!recovery_code_matches(
+        assert!(!legacy_recovery_code_matches(
             "K7QM2XRD9FTC",
-            &first_code_hash.salt,
-            &first_code_hash.code_hash
+            &first_salt,
+            &first_code_hash
         ));
-        assert!(!recovery_code_matches(
+        assert!(!legacy_recovery_code_matches(
             "K7QM2XRD9FTB",
-            &second_code_hash.salt,
-            &first_code_hash.code_hash
+            &second_salt,
+            &first_code_hash
         ));
     }
 

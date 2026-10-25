@@ -5,6 +5,8 @@ pub mod confirm_authenticator_replacement;
 pub mod confirm_email_change;
 pub mod confirm_identity;
 pub mod delete_account;
+pub mod end_all_sessions;
+pub mod end_other_session;
 pub mod find_account_profile;
 pub mod find_account_security;
 pub mod regenerate_recovery_codes;

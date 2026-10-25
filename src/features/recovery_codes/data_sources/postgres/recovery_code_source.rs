@@ -1,7 +1,6 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
-use crate::core::security::recovery_code::RecoveryCodeHash;
 use crate::features::recovery_codes::entities::stored_recovery_code::StoredRecoveryCode;
 
 #[derive(Default)]
@@ -12,29 +11,17 @@ impl PostgresRecoveryCodeSource {
         &self,
         executor: impl PgExecutor<'_>,
         user_id: Uuid,
-        recovery_code_hashes: &[RecoveryCodeHash],
+        code_phcs: &[String],
     ) -> Result<(), sqlx::Error> {
-        let code_ids: Vec<Uuid> = recovery_code_hashes
-            .iter()
-            .map(|_| Uuid::now_v7())
-            .collect();
-        let code_salts: Vec<Vec<u8>> = recovery_code_hashes
-            .iter()
-            .map(|recovery_code_hash| recovery_code_hash.salt.to_vec())
-            .collect();
-        let code_hashes: Vec<Vec<u8>> = recovery_code_hashes
-            .iter()
-            .map(|recovery_code_hash| recovery_code_hash.code_hash.to_vec())
-            .collect();
+        let code_ids: Vec<Uuid> = code_phcs.iter().map(|_| Uuid::now_v7()).collect();
         sqlx::query!(
             "WITH retired_codes AS (DELETE FROM recovery_codes WHERE user_id = $1)
-             INSERT INTO recovery_codes (id, user_id, salt, code_hash)
-             SELECT new_code.id, $1, new_code.salt, new_code.code_hash
-             FROM UNNEST($2::uuid[], $3::bytea[], $4::bytea[]) AS new_code (id, salt, code_hash)",
+             INSERT INTO recovery_codes (id, user_id, code_phc)
+             SELECT new_code.id, $1, new_code.code_phc
+             FROM UNNEST($2::uuid[], $3::text[]) AS new_code (id, code_phc)",
             user_id,
             &code_ids,
-            &code_salts,
-            &code_hashes,
+            code_phcs,
         )
         .execute(executor)
         .await?;
@@ -61,11 +48,14 @@ impl PostgresRecoveryCodeSource {
     ) -> Result<Vec<StoredRecoveryCode>, sqlx::Error> {
         sqlx::query_as!(
             StoredRecoveryCode,
-            "SELECT id, salt, code_hash
-             FROM recovery_codes
-             WHERE user_id = $1 AND used_at IS NULL
-             ORDER BY id
-             FOR UPDATE",
+            r#"SELECT id,
+                      code_phc,
+                      salt AS legacy_salt,
+                      code_hash AS legacy_code_hash
+               FROM recovery_codes
+               WHERE user_id = $1 AND used_at IS NULL
+               ORDER BY id
+               FOR UPDATE"#,
             user_id,
         )
         .fetch_all(executor)

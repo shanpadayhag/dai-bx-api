@@ -2,9 +2,9 @@ use sqlx::PgExecutor;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+use crate::core::security::password_hash::hash_password;
 use crate::core::security::recovery_code::{
-    RECOVERY_CODE_COUNT, RecoveryCodeHash, generate_recovery_code, hash_recovery_code,
-    normalize_recovery_code,
+    RECOVERY_CODE_COUNT, generate_recovery_code, normalize_recovery_code,
 };
 use crate::features::recovery_codes::data_sources::postgres::recovery_code_source::PostgresRecoveryCodeSource;
 use crate::features::recovery_codes::error::RecoveryCodeError;
@@ -29,16 +29,14 @@ impl IssueRecoveryCodes {
         let recovery_codes: Vec<Zeroizing<String>> = (0..RECOVERY_CODE_COUNT)
             .map(|_| generate_recovery_code())
             .collect();
-        let recovery_code_hashes: Vec<RecoveryCodeHash> = recovery_codes
-            .iter()
-            .map(|recovery_code| {
-                let normalized_code = normalize_recovery_code(recovery_code)
-                    .expect("a generated recovery code always normalizes");
-                hash_recovery_code(&normalized_code)
-            })
-            .collect();
+        let mut code_phcs = Vec::with_capacity(RECOVERY_CODE_COUNT);
+        for recovery_code in &recovery_codes {
+            let normalized_code = normalize_recovery_code(recovery_code)
+                .expect("a generated recovery code always normalizes");
+            code_phcs.push(hash_password(normalized_code).await?);
+        }
         self.postgres_recovery_code_source
-            .replace_all(executor, user_id, &recovery_code_hashes)
+            .replace_all(executor, user_id, &code_phcs)
             .await?;
         Ok(recovery_codes)
     }

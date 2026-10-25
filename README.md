@@ -144,7 +144,6 @@ curl http://localhost:9000/health
 | POST | `/auth/mfa/verify` | `{"code","rememberDevice"}` with the challenge cookie; an authenticator code or a recovery code → `200 {"next":"signed_in"}` and the session cookies, plus `"remainingRecoveryCodes"` after a recovery code |
 | POST | `/auth/refresh` | `{}` with the refresh cookie → `200 {"status":"refreshed"}` and a new cookie pair; `401` when the session is over or the token was reused |
 | POST | `/auth/sign-out` | `{}` with a session → `200 {"status":"signed_out"}`; ends this session and keeps the remembered device |
-| POST | `/auth/sign-out-everywhere` | `{}` with a session → `200 {"status":"signed_out"}`; ends every session and forgets every remembered device |
 | POST | `/auth/password-reset` | `{"email"}` → `202 {"status":"reset_email_sent"}` whether or not the account exists; `429` after 3 an hour |
 | POST | `/auth/password-reset/complete` | `{"token","password"}` → `200 {"next":"enter_code"}` and a challenge cookie; every session and remembered device ends; `422` for a used, expired or refused password |
 | GET | `/auth/session` | with the access cookie → `200 {"user":{"name","email","accentColor","theme"}}`; `401` when signed out, idle 7 days, or 30 days after sign-in |
@@ -152,6 +151,9 @@ curl http://localhost:9000/health
 | PATCH | `/account` | any of `{"name","accentColor","theme"}` → `200` with the updated profile; `422` for an unknown color or theme |
 | POST | `/account/password` | `{"currentPassword","newPassword"}` → `200 {"status":"password_changed"}`; ends every other session; `422` for a wrong current password |
 | POST | `/account/email` | `{"password","code","newEmail"}` → `202 {"status":"confirmation_email_sent"}` and a link to the new address |
+| GET | `/account/sessions` | with a session → `200 {"sessions":[{"id","createdAt","lastSeenAt","userAgent","isCurrent"}]}`, most recently used first |
+| POST | `/account/sessions/end` | `{"sessionId","password"}` → `200 {"status":"session_ended"}`; ends another of your sessions |
+| POST | `/account/sessions/end-all` | `{"password"}` → `200 {"status":"signed_out"}`; ends every session and forgets every remembered device |
 | POST | `/account/recovery-codes` | `{"password","code"}` → `200 {"recoveryCodes":[…10]}`; every earlier code stops working |
 | POST | `/account/authenticator` | `{"password","code"}` (a recovery code works) → `200 {"next":"set_up_authenticator"}` and a challenge cookie for `GET /auth/mfa/setup` |
 | POST | `/account/authenticator/confirm` | `{"code"}` from the new app → `200 {"status":"authenticator_replaced"}`; ends the other sessions and every remembered device |
@@ -185,10 +187,16 @@ The API sends no CORS headers: the browser reaches it through the web app's `/ba
 
 New passwords are checked against Have I Been Pwned's range API (only the first 5 characters of the password's SHA-1 leave the server). `HIBP_API_BASE_URL` overrides the default `https://api.pwnedpasswords.com`, which tests use to point at a local fake. If the service is slow or down, the check is skipped and logged, and the local rules still apply.
 
+### Security and privacy
+
+- [`docs/security/asvs-l2.md`](docs/security/asvs-l2.md) maps every OWASP ASVS 5.0 Level 2 authentication and session requirement to where it's met, and lists the tests behind every endpoint.
+- [`docs/security/gdpr-notes.md`](docs/security/gdpr-notes.md) records what personal data is stored, why, where, for how long, and how deletion works.
+
 ### Releases and housekeeping
 
 - Pushing to `release/v1.0.0` deploys the dev Lambda. Pushing a `v1.*` tag deploys prod, once CI passes on the tagged commit. Each environment has its own Supabase project, Lambda, deploy role and secrets.
 - Expired sessions, tokens, challenges and old security events are deleted daily by `purge_expired_auth_data()`. Schedule it once per Supabase project by running `ops/schedule-purge.sql` as the database owner (in the SQL editor, or with `psql`). Re-running it replaces the schedule. `ops/check-purge.sql` shows the job and its last runs.
+- To end someone's sessions as the operator, run `psql "$DATABASE_URL" -v account_email='person@example.com' -f ops/end-account-sessions.sql`. `ops/end-all-sessions.sql` ends everyone's.
 
 Before committing, run the same checks as CI:
 

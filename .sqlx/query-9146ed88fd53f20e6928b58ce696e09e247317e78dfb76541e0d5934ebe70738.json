@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE sessions\n             SET revoked_at = now(), revoked_reason = $2\n             WHERE revoked_at IS NULL\n               AND id IN (SELECT session_id FROM session_tokens WHERE token_hash = ANY($1))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "ByteaArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9146ed88fd53f20e6928b58ce696e09e247317e78dfb76541e0d5934ebe70738"
+}

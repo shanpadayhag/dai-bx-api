@@ -35,6 +35,10 @@ pub enum AccountError {
     StepExpired,
     #[error("confirmation text does not match")]
     WrongConfirmation,
+    #[error("the session to end is this one")]
+    CurrentSession,
+    #[error("the session has already ended")]
+    SessionAlreadyEnded,
     #[error("account no longer exists")]
     NotSignedIn,
     #[error(transparent)]
@@ -129,6 +133,12 @@ impl From<AccountError> for AppError {
             AccountError::WrongConfirmation => AppError::Validation(format!(
                 "type \"{ACCOUNT_DELETION_CONFIRMATION}\" to confirm"
             )),
+            AccountError::CurrentSession => {
+                AppError::Validation(String::from("use sign out to end this session"))
+            }
+            AccountError::SessionAlreadyEnded => {
+                AppError::Validation(String::from("that session has already ended"))
+            }
             AccountError::NotSignedIn => AppError::Unauthorized,
             AccountError::PasswordPolicy(password_policy_error) => password_policy_error.into(),
             AccountError::Throttled {

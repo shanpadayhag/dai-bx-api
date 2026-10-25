@@ -70,6 +70,8 @@ pub enum RevokedReason {
     PasswordReset,
     PasswordChanged,
     AuthenticatorReplaced,
+    ReplacedBySignIn,
+    EndedFromSettings,
 }
 
 impl RevokedReason {
@@ -81,6 +83,8 @@ impl RevokedReason {
             RevokedReason::PasswordReset => "password_reset",
             RevokedReason::PasswordChanged => "password_changed",
             RevokedReason::AuthenticatorReplaced => "authenticator_replaced",
+            RevokedReason::ReplacedBySignIn => "replaced_by_sign_in",
+            RevokedReason::EndedFromSettings => "ended_from_settings",
         }
     }
 }

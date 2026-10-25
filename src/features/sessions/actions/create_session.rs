@@ -4,7 +4,8 @@ use uuid::Uuid;
 use crate::core::request_context::RequestContext;
 use crate::features::sessions::actions::issue_session_tokens::IssueSessionTokens;
 use crate::features::sessions::data_sources::postgres::session_source::PostgresSessionSource;
-use crate::features::sessions::entities::session::IssuedSessionTokens;
+use crate::features::sessions::entities::presented_session::PresentedSession;
+use crate::features::sessions::entities::session::{IssuedSessionTokens, RevokedReason};
 use crate::features::sessions::error::SessionError;
 
 #[derive(Default)]
@@ -26,7 +27,22 @@ impl CreateSession {
         connection: &mut PgConnection,
         user_id: Uuid,
         request_context: &RequestContext,
+        presented_session: &PresentedSession,
     ) -> Result<IssuedSessionTokens, SessionError> {
+        let presented_token_hashes: Vec<Vec<u8>> = presented_session
+            .token_hashes()
+            .iter()
+            .map(|token_hash| token_hash.to_vec())
+            .collect();
+        if !presented_token_hashes.is_empty() {
+            self.postgres_session_source
+                .revoke_by_token_hashes(
+                    &mut *connection,
+                    &presented_token_hashes,
+                    RevokedReason::ReplacedBySignIn.as_str(),
+                )
+                .await?;
+        }
         let session_id = self
             .postgres_session_source
             .insert_session(
@@ -74,7 +90,12 @@ mod tests {
         let mut connection = db_pool.acquire().await.expect("a connection");
 
         let issued_tokens = CreateSession::new()
-            .execute(&mut connection, user_id, &RequestContext::default())
+            .execute(
+                &mut connection,
+                user_id,
+                &RequestContext::default(),
+                &PresentedSession::default(),
+            )
             .await
             .expect("creating the session should succeed");
 

@@ -16,6 +16,7 @@ use crate::features::security_log::entities::security_event::{
     NewSecurityEvent, SecurityEventDetails, SecurityEventType,
 };
 use crate::features::sessions::actions::create_session::CreateSession;
+use crate::features::sessions::entities::presented_session::PresentedSession;
 use crate::features::sessions::entities::session::IssuedSessionTokens;
 use crate::features::throttling::actions::check_attempt_allowed::CheckAttemptAllowed;
 use crate::features::throttling::actions::clear_account_ip_throttle::ClearAccountIpThrottle;
@@ -78,6 +79,7 @@ impl<'a> SignIn<'a> {
         &self,
         sign_in_details: SignInDetails<'_>,
         request_context: &RequestContext,
+        presented_session: &PresentedSession,
     ) -> Result<SignInOutcome, AuthError> {
         let found_user = self
             .find_user_by_email
@@ -132,7 +134,12 @@ impl<'a> SignIn<'a> {
         let mut sign_in_transaction = self.db_pool.begin().await?;
         let session_tokens = self
             .create_session
-            .execute(&mut sign_in_transaction, found_user.id, request_context)
+            .execute(
+                &mut sign_in_transaction,
+                found_user.id,
+                request_context,
+                presented_session,
+            )
             .await?;
         self.mark_remembered_device_used
             .execute(&mut *sign_in_transaction, remembered_device.id)

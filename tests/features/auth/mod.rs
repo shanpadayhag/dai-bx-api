@@ -1,3 +1,4 @@
+mod malformed_email;
 mod mfa_setup;
 mod mfa_verify;
 mod password_reset;
