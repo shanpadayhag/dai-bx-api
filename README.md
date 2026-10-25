@@ -185,6 +185,11 @@ The API sends no CORS headers: the browser reaches it through the web app's `/ba
 
 New passwords are checked against Have I Been Pwned's range API (only the first 5 characters of the password's SHA-1 leave the server). `HIBP_API_BASE_URL` overrides the default `https://api.pwnedpasswords.com`, which tests use to point at a local fake. If the service is slow or down, the check is skipped and logged, and the local rules still apply.
 
+### Releases and housekeeping
+
+- Pushing to `release/v1.0.0` deploys the dev Lambda. Pushing a `v1.*` tag deploys prod, once CI passes on the tagged commit. Each environment has its own Supabase project, Lambda, deploy role and secrets.
+- Expired sessions, tokens, challenges and old security events are deleted daily by `purge_expired_auth_data()`. Schedule it once per Supabase project by running `ops/schedule-purge.sql` as the database owner (in the SQL editor, or with `psql`). Re-running it replaces the schedule. `ops/check-purge.sql` shows the job and its last runs.
+
 Before committing, run the same checks as CI:
 
 ```sh
