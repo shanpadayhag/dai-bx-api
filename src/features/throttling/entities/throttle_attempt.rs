@@ -2,6 +2,7 @@ use std::net::IpAddr;
 
 use data_encoding::HEXLOWER;
 use sha2::{Digest, Sha256};
+use uuid::Uuid;
 
 pub const FREE_ACCOUNT_IP_FAILURES: i32 = 5;
 pub const FIRST_BLOCK_SECONDS: i64 = 60;
@@ -10,6 +11,8 @@ pub const LOOSE_FAILURE_LIMIT: i32 = 100;
 pub const LOOSE_WINDOW_SECONDS: i64 = 60 * 60;
 pub const EMAIL_SEND_LIMIT: i32 = 3;
 pub const EMAIL_SEND_WINDOW_SECONDS: i64 = 60 * 60;
+pub const WRITE_LIMIT: i32 = 600;
+pub const WRITE_WINDOW_SECONDS: i64 = 10 * 60;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThrottleScope {
@@ -43,6 +46,10 @@ pub fn email_send_key(purpose: EmailSendPurpose, email: &str) -> String {
         purpose.key_prefix(),
         email_account_key(email)
     )
+}
+
+pub fn write_key(user_id: Uuid) -> String {
+    format!("write:{user_id}")
 }
 
 pub fn account_ip_block_seconds(failure_count: i32) -> Option<i64> {

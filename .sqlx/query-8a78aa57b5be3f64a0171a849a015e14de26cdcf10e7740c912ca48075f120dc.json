@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tasks\n             SET position = position - 1\n             WHERE group_id = $1 AND parent_id IS NOT DISTINCT FROM $2 AND position > $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8a78aa57b5be3f64a0171a849a015e14de26cdcf10e7740c912ca48075f120dc"
+}

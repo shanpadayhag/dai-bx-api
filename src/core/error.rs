@@ -9,6 +9,10 @@ pub enum AppError {
     NotFound,
     #[error("{0}")]
     Validation(String),
+    #[error("{message} at {path}")]
+    ValidationAt { message: String, path: String },
+    #[error("{0}")]
+    PayloadTooLarge(String),
     #[error("{0}")]
     Conflict(String),
     #[error("unauthorized")]
@@ -30,6 +34,12 @@ struct ErrorResponse<'a> {
     error: &'a str,
 }
 
+#[derive(Serialize)]
+struct LocatedErrorResponse<'a> {
+    error: &'a str,
+    path: &'a str,
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         if let AppError::TooManyRequests {
@@ -45,12 +55,28 @@ impl IntoResponse for AppError {
             )
                 .into_response();
         }
+        if let AppError::ValidationAt { message, path } = &self {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(LocatedErrorResponse {
+                    error: message,
+                    path,
+                }),
+            )
+                .into_response();
+        }
         let (status_code, safe_message) = match &self {
             AppError::NotFound => (StatusCode::NOT_FOUND, "not found"),
             AppError::Validation(validation_message) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 validation_message.as_str(),
             ),
+            AppError::ValidationAt { message, .. } => {
+                (StatusCode::UNPROCESSABLE_ENTITY, message.as_str())
+            }
+            AppError::PayloadTooLarge(too_large_message) => {
+                (StatusCode::PAYLOAD_TOO_LARGE, too_large_message.as_str())
+            }
             AppError::Conflict(conflict_message) => {
                 (StatusCode::CONFLICT, conflict_message.as_str())
             }
@@ -101,6 +127,24 @@ mod tests {
                 .get(header::RETRY_AFTER)
                 .and_then(|header_value| header_value.to_str().ok()),
             Some("120")
+        );
+    }
+
+    #[tokio::test]
+    async fn answers_a_located_validation_error_with_its_path() {
+        let response = AppError::ValidationAt {
+            message: String::from("every task needs a name"),
+            path: String::from("tasks[0].name"),
+        }
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let response_body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .expect("the body should read");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&response_body).expect("JSON"),
+            serde_json::json!({ "error": "every task needs a name", "path": "tasks[0].name" })
         );
     }
 

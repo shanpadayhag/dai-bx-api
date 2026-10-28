@@ -2,6 +2,7 @@ use crate::core::error::AppError;
 use crate::core::security::password_hash::PasswordHashError;
 use crate::core::security::totp_secret_cipher::TotpCipherError;
 use crate::features::auth_challenges::error::AuthChallengeError;
+use crate::features::categories::error::CategoryError;
 use crate::features::email::error::EmailError;
 use crate::features::email_tokens::error::EmailTokenError;
 use crate::features::invites::error::InviteError;
@@ -48,6 +49,7 @@ macro_rules! auth_error_from_internal {
 
 auth_error_from_internal!(
     AuthChallengeError,
+    CategoryError,
     EmailError,
     EmailTokenError,
     ForbiddenDetail,

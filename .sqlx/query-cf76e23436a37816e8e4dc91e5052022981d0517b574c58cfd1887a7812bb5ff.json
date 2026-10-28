@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tasks (id, user_id, group_id, parent_id, position, name)\n               SELECT new_task.id, $1, $2, new_task.parent_id, new_task.position, new_task.name\n               FROM UNNEST($3::uuid[], $4::uuid[], $5::integer[], $6::text[])\n                    WITH ORDINALITY AS new_task (id, parent_id, position, name, insert_order)\n               ORDER BY new_task.insert_order",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "Int4Array",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf76e23436a37816e8e4dc91e5052022981d0517b574c58cfd1887a7812bb5ff"
+}

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tasks\n             SET name = coalesce($3, name),\n                 estimate_minutes = CASE WHEN $4 THEN $5 ELSE estimate_minutes END,\n                 updated_at = now()\n             WHERE id = $1 AND group_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "69b158b8d4d000580780163ba835e80412d3e548c6fedcb869b667e5064a1ac6"
+}

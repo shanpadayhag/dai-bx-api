@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*)::integer AS \"sibling_count!\"\n               FROM tasks\n               WHERE group_id = $1 AND parent_id IS NOT DISTINCT FROM $2 AND id <> $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sibling_count!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "27d41198e5752c249253f112406af2e890ee83dc8b654dc5a110b7a8cec18214"
+}

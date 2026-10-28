@@ -5,6 +5,7 @@ use crate::core::request_context::RequestContext;
 use crate::core::security::password_hash::hash_password;
 use crate::core::state::AppState;
 use crate::features::auth::error::AuthError;
+use crate::features::categories::actions::create_default_categories::CreateDefaultCategories;
 use crate::features::email::actions::send_account_email::SendAccountEmail;
 use crate::features::email::entities::account_email::AccountEmailKind;
 use crate::features::email_tokens::actions::issue_email_token::IssueEmailToken;
@@ -34,6 +35,7 @@ pub struct SignUp<'a> {
     check_new_password: CheckNewPassword<'a>,
     send_account_email: SendAccountEmail<'a>,
     create_user: CreateUser,
+    create_default_categories: CreateDefaultCategories,
     check_invite_usable: CheckInviteUsable,
     redeem_invite: RedeemInvite,
     record_security_event: RecordSecurityEvent,
@@ -57,6 +59,7 @@ impl<'a> SignUp<'a> {
                 &app_config.app_origin,
             ),
             create_user: CreateUser::new(),
+            create_default_categories: CreateDefaultCategories::new(),
             check_invite_usable: CheckInviteUsable::new(),
             redeem_invite: RedeemInvite::new(),
             record_security_event: RecordSecurityEvent::new(),
@@ -100,6 +103,9 @@ impl<'a> SignUp<'a> {
             }
             return Ok(());
         };
+        self.create_default_categories
+            .execute(&mut *sign_up_transaction, created_user.id)
+            .await?;
         if let Some(invite_code) = invite_code {
             self.redeem_invite
                 .execute(&mut *sign_up_transaction, invite_code, created_user.id)

@@ -13,7 +13,7 @@ use tower_http::timeout::TimeoutLayer;
 use crate::core::middlewares::client_ip::attach_client_ip;
 use crate::core::middlewares::csrf_protection::require_same_origin_json;
 use crate::core::state::AppState;
-use crate::features::{account, auth, health};
+use crate::features::{account, auth, categories, health, task_groups, tasks};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_REQUEST_BODY_BYTES: usize = 64 * 1024;
@@ -34,7 +34,10 @@ pub fn app(app_state: AppState) -> Router {
     Router::new()
         .nest("/account", account::router::router())
         .nest("/auth", auth::router::router())
+        .nest("/categories", categories::router::router())
         .nest("/health", health::router::router())
+        .nest("/task-groups", task_groups::router::router())
+        .merge(tasks::router::router())
         .layer(middleware_stack)
         .with_state(app_state)
 }

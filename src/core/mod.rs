@@ -3,6 +3,7 @@ pub mod config;
 pub mod cookie;
 pub mod error;
 pub mod http_client;
+pub mod json_field;
 pub mod mail_transport;
 pub mod middlewares;
 pub mod request_context;

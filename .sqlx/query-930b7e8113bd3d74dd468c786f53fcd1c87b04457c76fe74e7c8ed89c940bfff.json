@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT coalesce(max(position) + 1, 0) AS \"next_position!\"\n               FROM tasks\n               WHERE group_id = $1 AND parent_id IS NOT DISTINCT FROM $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "next_position!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "930b7e8113bd3d74dd468c786f53fcd1c87b04457c76fe74e7c8ed89c940bfff"
+}
