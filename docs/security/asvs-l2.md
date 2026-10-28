@@ -129,7 +129,7 @@ Changes to an account's own security need fresh proof while signed in: the email
 | 3.5.1 | 1 | Cross-origin requests to sensitive functions are rejected | Met | non-GET requests need `Sec-Fetch-Site: same-origin`, or an `Origin` listed in `APP_ORIGINS`, and a JSON body: `src/core/middlewares/csrf_protection.rs`; `tests/features/core/csrf_protection.rs` |
 | 3.5.2 | 1 | If relying on CORS preflight, it can't be bypassed | Not applicable | DaiBX doesn't rely on CORS; the API sends no CORS headers, and 3.5.1's checks apply instead |
 | 3.5.3 | 1 | Sensitive functions use unsafe HTTP methods | Met | every change is `POST` or `PATCH`; `GET` endpoints only read |
-| 3.5.4 | 2 | Separate applications live on separate hostnames | Met | v2 is on `dai-bx-web.vercel.app`, the v3 alpha on `dai-bx-v3.vercel.app`; each API Lambda has its own Function URL host |
+| 3.5.4 | 2 | Separate applications live on separate hostnames | Met | v2 is on `dai-bx-web.vercel.app`, v3 on `dai-bx.vercel.app` (and its first alpha address `dai-bx-v3.vercel.app`); each API Lambda has its own Function URL host |
 | 3.5.5 | 2 | `postMessage` origins and syntax are checked | Not applicable | the web app listens for no `postMessage` events |
 
 ## Endpoint test coverage
