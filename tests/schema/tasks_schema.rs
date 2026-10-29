@@ -19,13 +19,12 @@ async fn seed_category(db_pool: &PgPool, user_id: Uuid, name: &str) -> Uuid {
     .expect("seed category insert should succeed")
 }
 
-async fn seed_task_group(db_pool: &PgPool, user_id: Uuid, category_id: Option<Uuid>) -> Uuid {
+async fn seed_task_group(db_pool: &PgPool, user_id: Uuid) -> Uuid {
     sqlx::query_scalar(
-        "INSERT INTO task_groups (id, user_id, name, category_id) VALUES (gen_random_uuid(), $1, 'Today', $2)
+        "INSERT INTO task_groups (id, user_id, name) VALUES (gen_random_uuid(), $1, 'Today')
          RETURNING id",
     )
     .bind(user_id)
-    .bind(category_id)
     .fetch_one(db_pool)
     .await
     .expect("seed task group insert should succeed")
@@ -61,49 +60,10 @@ async fn find_task_group_ids(db_pool: &PgPool, task_ids: &[Uuid]) -> Vec<Uuid> {
 }
 
 #[sqlx::test]
-async fn deleting_a_category_clears_only_the_category_of_its_groups(db_pool: PgPool) {
-    let user_id = seed_user(&db_pool, "owner@example.com").await;
-    let category_id = seed_category(&db_pool, user_id, "Studies").await;
-    let task_group_id = seed_task_group(&db_pool, user_id, Some(category_id)).await;
-
-    sqlx::query("DELETE FROM categories WHERE id = $1")
-        .bind(category_id)
-        .execute(&db_pool)
-        .await
-        .expect("category delete should succeed");
-
-    let (remaining_category_id, remaining_user_id): (Option<Uuid>, Uuid) =
-        sqlx::query_as("SELECT category_id, user_id FROM task_groups WHERE id = $1")
-            .bind(task_group_id)
-            .fetch_one(&db_pool)
-            .await
-            .expect("the group should still exist");
-    assert_eq!(remaining_category_id, None);
-    assert_eq!(remaining_user_id, user_id);
-}
-
-#[sqlx::test]
-async fn refuses_a_group_using_another_persons_category(db_pool: PgPool) {
-    let owner_id = seed_user(&db_pool, "owner@example.com").await;
-    let other_person_id = seed_user(&db_pool, "other@example.com").await;
-    let other_category_id = seed_category(&db_pool, other_person_id, "Work").await;
-
-    let foreign_category_insert = sqlx::query(
-        "INSERT INTO task_groups (id, user_id, name, category_id) VALUES (gen_random_uuid(), $1, 'Mine', $2)",
-    )
-    .bind(owner_id)
-    .bind(other_category_id)
-    .execute(&db_pool)
-    .await;
-
-    assert!(foreign_category_insert.is_err());
-}
-
-#[sqlx::test]
 async fn refuses_a_subtask_in_a_different_group_from_its_parent(db_pool: PgPool) {
     let user_id = seed_user(&db_pool, "owner@example.com").await;
-    let first_group_id = seed_task_group(&db_pool, user_id, None).await;
-    let second_group_id = seed_task_group(&db_pool, user_id, None).await;
+    let first_group_id = seed_task_group(&db_pool, user_id).await;
+    let second_group_id = seed_task_group(&db_pool, user_id).await;
     let parent_task_id = seed_task(&db_pool, user_id, first_group_id, None, 0).await;
 
     let cross_group_insert = sqlx::query(
@@ -123,7 +83,7 @@ async fn refuses_a_subtask_in_a_different_group_from_its_parent(db_pool: PgPool)
 async fn refuses_a_task_in_another_persons_group(db_pool: PgPool) {
     let owner_id = seed_user(&db_pool, "owner@example.com").await;
     let other_person_id = seed_user(&db_pool, "other@example.com").await;
-    let other_group_id = seed_task_group(&db_pool, other_person_id, None).await;
+    let other_group_id = seed_task_group(&db_pool, other_person_id).await;
 
     let foreign_group_insert = sqlx::query(
         "INSERT INTO tasks (id, user_id, group_id, position, name)
@@ -140,7 +100,7 @@ async fn refuses_a_task_in_another_persons_group(db_pool: PgPool) {
 #[sqlx::test]
 async fn deleting_a_task_removes_its_whole_subtree_and_nothing_else(db_pool: PgPool) {
     let user_id = seed_user(&db_pool, "owner@example.com").await;
-    let task_group_id = seed_task_group(&db_pool, user_id, None).await;
+    let task_group_id = seed_task_group(&db_pool, user_id).await;
     let parent_task_id = seed_task(&db_pool, user_id, task_group_id, None, 0).await;
     let child_task_id = seed_task(&db_pool, user_id, task_group_id, Some(parent_task_id), 0).await;
     seed_task(&db_pool, user_id, task_group_id, Some(child_task_id), 0).await;
@@ -162,8 +122,8 @@ async fn deleting_a_task_removes_its_whole_subtree_and_nothing_else(db_pool: PgP
 #[sqlx::test]
 async fn moving_a_task_to_another_group_carries_its_subtree_along(db_pool: PgPool) {
     let user_id = seed_user(&db_pool, "owner@example.com").await;
-    let source_group_id = seed_task_group(&db_pool, user_id, None).await;
-    let destination_group_id = seed_task_group(&db_pool, user_id, None).await;
+    let source_group_id = seed_task_group(&db_pool, user_id).await;
+    let destination_group_id = seed_task_group(&db_pool, user_id).await;
     let moved_task_id = seed_task(&db_pool, user_id, source_group_id, None, 0).await;
     let child_task_id = seed_task(&db_pool, user_id, source_group_id, Some(moved_task_id), 0).await;
     let grandchild_task_id =
@@ -189,7 +149,7 @@ async fn moving_a_task_to_another_group_carries_its_subtree_along(db_pool: PgPoo
 #[sqlx::test]
 async fn deleting_a_group_removes_its_tasks(db_pool: PgPool) {
     let user_id = seed_user(&db_pool, "owner@example.com").await;
-    let task_group_id = seed_task_group(&db_pool, user_id, None).await;
+    let task_group_id = seed_task_group(&db_pool, user_id).await;
     let parent_task_id = seed_task(&db_pool, user_id, task_group_id, None, 0).await;
     seed_task(&db_pool, user_id, task_group_id, Some(parent_task_id), 0).await;
 
@@ -205,8 +165,8 @@ async fn deleting_a_group_removes_its_tasks(db_pool: PgPool) {
 #[sqlx::test]
 async fn deleting_a_user_removes_their_categories_groups_and_tasks(db_pool: PgPool) {
     let user_id = seed_user(&db_pool, "owner@example.com").await;
-    let category_id = seed_category(&db_pool, user_id, "Goals").await;
-    let task_group_id = seed_task_group(&db_pool, user_id, Some(category_id)).await;
+    seed_category(&db_pool, user_id, "Goals").await;
+    let task_group_id = seed_task_group(&db_pool, user_id).await;
     let parent_task_id = seed_task(&db_pool, user_id, task_group_id, None, 0).await;
     seed_task(&db_pool, user_id, task_group_id, Some(parent_task_id), 0).await;
 
@@ -243,7 +203,7 @@ async fn refuses_a_second_category_with_the_same_name_in_any_case(db_pool: PgPoo
 #[sqlx::test]
 async fn refuses_values_outside_the_column_rules(db_pool: PgPool) {
     let user_id = seed_user(&db_pool, "owner@example.com").await;
-    let task_group_id = seed_task_group(&db_pool, user_id, None).await;
+    let task_group_id = seed_task_group(&db_pool, user_id).await;
     let rejected_inserts = [
         (
             "INSERT INTO categories (id, user_id, name, color) VALUES (gen_random_uuid(), $1, 'Loud', '#FF0000')",
@@ -350,4 +310,55 @@ async fn gives_every_existing_account_the_four_default_categories_once(db_pool: 
             ("Work".to_owned(), "#c6afa3".to_owned()),
         ]
     );
+}
+
+#[sqlx::test(migrations = false)]
+async fn dropping_the_group_category_keeps_every_group_and_task(db_pool: PgPool) {
+    let migrator = Migrator::new(std::path::Path::new("./migrations"))
+        .await
+        .expect("migrations should load");
+    let drop_category_version = 20261029090000;
+    for migration in migrator
+        .iter()
+        .filter(|migration| migration.version < drop_category_version)
+    {
+        sqlx::raw_sql(migration.sql.clone())
+            .execute(&db_pool)
+            .await
+            .expect("earlier migration should apply");
+    }
+    let user_id = seed_user(&db_pool, "existing@example.com").await;
+    let category_id = seed_category(&db_pool, user_id, "Health").await;
+    let task_group_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO task_groups (id, user_id, name, category_id) VALUES (gen_random_uuid(), $1, 'Gym', $2)
+         RETURNING id",
+    )
+    .bind(user_id)
+    .bind(category_id)
+    .fetch_one(&db_pool)
+    .await
+    .expect("a categorized group should insert");
+    seed_task(&db_pool, user_id, task_group_id, None, 0).await;
+
+    for migration in migrator
+        .iter()
+        .filter(|migration| migration.version >= drop_category_version)
+    {
+        sqlx::raw_sql(migration.sql.clone())
+            .execute(&db_pool)
+            .await
+            .expect("the drop migration should apply");
+    }
+
+    let remaining_category_columns: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM information_schema.columns
+         WHERE table_name = 'task_groups' AND column_name = 'category_id'",
+    )
+    .fetch_one(&db_pool)
+    .await
+    .expect("the catalog query should succeed");
+    assert_eq!(remaining_category_columns, 0);
+    assert_eq!(count_rows(&db_pool, "task_groups").await, 1);
+    assert_eq!(count_rows(&db_pool, "tasks").await, 1);
+    assert_eq!(count_rows(&db_pool, "categories").await, 1);
 }

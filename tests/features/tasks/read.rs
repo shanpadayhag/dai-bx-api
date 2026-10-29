@@ -33,7 +33,7 @@ async fn returns_the_group_and_its_tasks_as_a_flat_list(db_pool: PgPool) {
     let group_tasks = response_json(response).await;
     assert_eq!(
         group_tasks["group"],
-        json!({ "id": task_group_id, "name": "Today", "category": null })
+        json!({ "id": task_group_id, "name": "Today" })
     );
     assert_eq!(group_tasks["tasks"].as_array().expect("a list").len(), 2);
     assert_eq!(group_tasks["openCount"], 2);

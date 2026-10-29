@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE task_groups\n               SET name = $3, updated_at = now()\n               WHERE id = $1 AND user_id = $2\n               RETURNING id,\n                         name,\n                         (SELECT count(*) FROM tasks\n                          WHERE tasks.group_id = task_groups.id\n                            AND tasks.completed_at IS NULL) AS \"open_task_count!\",\n                         (SELECT count(*) FROM tasks\n                          WHERE tasks.group_id = task_groups.id) AS \"task_count!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "task_groups",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "task_groups",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "open_task_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "task_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "b66da3006e7676ee8268b86bbbf731e5a82871a3cc206f76ad4c3159281a0f2a"
+}

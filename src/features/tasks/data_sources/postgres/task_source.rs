@@ -461,7 +461,7 @@ pub mod tests {
 
     pub async fn seed_task_group(db_pool: &PgPool, user_id: Uuid) -> TaskGroup {
         CreateTaskGroup::new()
-            .execute(db_pool, user_id, "Today", None)
+            .execute(db_pool, user_id, "Today")
             .await
             .expect("the group should be created")
     }

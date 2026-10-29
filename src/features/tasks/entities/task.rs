@@ -112,7 +112,6 @@ mod tests {
             group: TaskGroupDetails {
                 id: Uuid::now_v7(),
                 name: String::from("Today"),
-                category: None,
             },
             tasks: vec![task(false), task(true), task(false)],
         };

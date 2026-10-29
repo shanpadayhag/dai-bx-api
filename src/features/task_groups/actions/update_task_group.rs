@@ -2,9 +2,7 @@ use sqlx::PgExecutor;
 use uuid::Uuid;
 
 use crate::features::task_groups::data_sources::postgres::task_group_source::PostgresTaskGroupSource;
-use crate::features::task_groups::entities::task_group::{
-    TaskGroup, TaskGroupChanges, TaskGroupSave,
-};
+use crate::features::task_groups::entities::task_group::TaskGroup;
 use crate::features::task_groups::error::TaskGroupError;
 
 #[derive(Default)]
@@ -24,15 +22,11 @@ impl UpdateTaskGroup {
         executor: impl PgExecutor<'_>,
         user_id: Uuid,
         task_group_id: Uuid,
-        task_group_changes: &TaskGroupChanges,
+        task_group_name: &str,
     ) -> Result<TaskGroup, TaskGroupError> {
-        match self
-            .postgres_task_group_source
-            .update(executor, user_id, task_group_id, task_group_changes)
+        self.postgres_task_group_source
+            .rename(executor, user_id, task_group_id, task_group_name)
             .await?
-        {
-            Some(TaskGroupSave::Saved(updated_task_group)) => Ok(updated_task_group),
-            Some(TaskGroupSave::CategoryMissing) | None => Err(TaskGroupError::NotFound),
-        }
+            .ok_or(TaskGroupError::NotFound)
     }
 }

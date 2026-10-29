@@ -1,6 +1,5 @@
 use uuid::Uuid;
 
-use crate::features::categories::entities::category::Category;
 use crate::features::task_groups::error::TaskGroupError;
 
 pub const TASK_GROUP_NAME_MAX_CHARACTERS: usize = 200;
@@ -9,7 +8,6 @@ pub const TASK_GROUP_NAME_MAX_CHARACTERS: usize = 200;
 pub struct TaskGroup {
     pub id: Uuid,
     pub name: String,
-    pub category: Option<Category>,
     pub open_task_count: i64,
     pub task_count: i64,
 }
@@ -18,7 +16,6 @@ pub struct TaskGroup {
 pub struct TaskGroupDetails {
     pub id: Uuid,
     pub name: String,
-    pub category: Option<Category>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,19 +23,6 @@ pub struct NewTaskGroup {
     pub id: Uuid,
     pub user_id: Uuid,
     pub name: String,
-    pub category_id: Option<Uuid>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TaskGroupChanges {
-    pub name: Option<String>,
-    pub category_change: Option<Option<Uuid>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TaskGroupSave {
-    Saved(TaskGroup),
-    CategoryMissing,
 }
 
 pub fn validate_task_group_name(raw_name: &str) -> Result<String, TaskGroupError> {

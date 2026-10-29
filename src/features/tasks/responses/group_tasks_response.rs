@@ -3,17 +3,9 @@ use serde::Serialize;
 use crate::features::tasks::entities::task::{AffectedGroup, GroupTasks, MovedTask, Task};
 
 #[derive(Debug, Serialize)]
-pub struct GroupCategoryResponse {
-    pub id: String,
-    pub name: String,
-    pub color: String,
-}
-
-#[derive(Debug, Serialize)]
 pub struct GroupResponse {
     pub id: String,
     pub name: String,
-    pub category: Option<GroupCategoryResponse>,
 }
 
 #[derive(Debug, Serialize)]
@@ -57,14 +49,6 @@ impl From<GroupTasks> for GroupTasksResponse {
             group: GroupResponse {
                 id: group_tasks.group.id.to_string(),
                 name: group_tasks.group.name,
-                category: group_tasks
-                    .group
-                    .category
-                    .map(|category| GroupCategoryResponse {
-                        id: category.id.to_string(),
-                        name: category.name,
-                        color: category.color,
-                    }),
             },
             tasks: group_tasks
                 .tasks

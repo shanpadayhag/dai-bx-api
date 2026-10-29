@@ -79,7 +79,7 @@ async fn imports_the_daily_plan_file_with_its_names_nesting_and_order(db_pool: P
     assert_eq!(response.status(), StatusCode::CREATED);
     let group_tasks = response_json(response).await;
     assert_eq!(group_tasks["group"]["name"], "Today");
-    assert_eq!(group_tasks["group"]["category"], serde_json::Value::Null);
+    assert!(group_tasks["group"].get("category").is_none());
     assert_eq!(group_tasks["openCount"], 4);
     assert_eq!(group_tasks["doneCount"], 0);
     let card_task = find_task_named(&group_tasks, "Project – Card title");

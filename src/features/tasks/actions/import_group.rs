@@ -50,7 +50,7 @@ impl<'a> ImportGroup<'a> {
         let mut import_transaction = self.db_pool.begin().await?;
         let created_task_group = self
             .create_task_group
-            .execute(&mut *import_transaction, user_id, &group_import.name, None)
+            .execute(&mut *import_transaction, user_id, &group_import.name)
             .await?;
         let new_tasks = new_tasks_for(group_import, user_id, created_task_group.id);
         self.postgres_task_source
@@ -70,7 +70,6 @@ impl<'a> ImportGroup<'a> {
             group: TaskGroupDetails {
                 id: created_task_group.id,
                 name: created_task_group.name,
-                category: created_task_group.category,
             },
             tasks: group_tasks,
         })
