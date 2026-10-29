@@ -19,7 +19,11 @@ async fn deletes_a_category(db_pool: PgPool) {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(response).await,
+        serde_json::json!({ "status": "deleted" })
+    );
     let remaining_categories = response_json(
         get_with_cookies(
             build_test_app(db_pool),
