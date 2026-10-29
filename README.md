@@ -194,7 +194,7 @@ New passwords are checked against Have I Been Pwned's range API (only the first 
 
 ### Releases and housekeeping
 
-- Pushing to `release/v1.0.0` deploys the dev Lambda. Pushing a `v1.*` tag deploys prod, once CI passes on the tagged commit. Each environment has its own Supabase project, Lambda, deploy role and secrets.
+- Pushing to a `release/*` branch deploys the dev Lambda once CI passes. Pushing a `v1.*` tag deploys prod, once CI passes on the tagged commit. Each environment has its own Supabase project, Lambda, deploy role and secrets.
 - Expired sessions, tokens, challenges and old security events are deleted daily by `purge_expired_auth_data()`. Schedule it once per Supabase project by running `ops/schedule-purge.sql` as the database owner (in the SQL editor, or with `psql`). Re-running it replaces the schedule. `ops/check-purge.sql` shows the job and its last runs.
 - To end someone's sessions as the operator, run `psql "$DATABASE_URL" -v account_email='person@example.com' -f ops/end-account-sessions.sql`. `ops/end-all-sessions.sql` ends everyone's.
 
@@ -217,11 +217,11 @@ cargo sqlx prepare -- --all-targets
 
 ## Roadmap
 
-- [ ] Authentication: invites, sign-up, email verification, authenticator-app MFA, sessions, account settings and deletion
-- [ ] Tasks, with categories
-- [ ] Board
+- [x] Authentication: invites, sign-up, email verification, authenticator-app MFA, sessions, account settings and deletion
+- [x] Tasks: groups, nested tasks, moves and group import, plus the categories the calendar uses
+- [ ] Board, with user-defined card properties
 - [ ] Calendar and time tracking
-- [ ] Workflows
+- [ ] Workflows: board rules and card schedules
 - [ ] Automatic scheduling
 
 See the [open issues](https://github.com/shanpadayhag/dai-bx-api/issues) for a full list of proposed features and known issues.
