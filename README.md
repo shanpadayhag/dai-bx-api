@@ -219,7 +219,7 @@ cargo sqlx prepare -- --all-targets
 
 - [x] Authentication: invites, sign-up, email verification, authenticator-app MFA, sessions, account settings and deletion
 - [x] Tasks: groups, nested tasks, moves and group import, plus the categories the calendar uses
-- [ ] Board, with user-defined card properties
+- [x] Board, with user-defined card properties, Markdown notes and task-to-card links
 - [ ] Calendar and time tracking
 - [ ] Workflows: board rules and card schedules
 - [ ] Automatic scheduling
