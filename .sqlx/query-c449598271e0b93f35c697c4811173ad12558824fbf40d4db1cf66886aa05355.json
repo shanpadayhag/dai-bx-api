@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id,\n                      list_id,\n                      position,\n                      title,\n                      notes,\n                      to_char(due_date, 'YYYY-MM-DD') AS due_date,\n                      to_char(due_time, 'HH24:MI') AS due_time\n               FROM cards\n               WHERE id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "list_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "list_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "position",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "notes",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "notes"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "due_date",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "due_time",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "c449598271e0b93f35c697c4811173ad12558824fbf40d4db1cf66886aa05355"
+}

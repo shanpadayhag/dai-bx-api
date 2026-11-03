@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO board_lists (id, user_id, board_id, position, name)\n             SELECT $1, $2, $3, coalesce(max(position) + 1, 0), $4\n             FROM board_lists\n             WHERE board_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4586f1d964272ee5a3dad2c5078e29c38dd12b1f72265cd4cc9e66ecd981a907"
+}

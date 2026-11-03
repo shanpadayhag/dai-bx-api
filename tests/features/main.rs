@@ -1,5 +1,9 @@
 mod account;
 mod auth;
+pub mod board_lists;
+pub mod board_properties;
+pub mod boards;
+pub mod cards;
 pub mod categories;
 mod core;
 mod health;

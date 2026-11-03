@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cards (id, user_id, board_id, list_id, position, title, notes)\n             SELECT $1, $2, $3, $4, coalesce(max(position) + 1, 0), $5, $6\n             FROM cards\n             WHERE list_id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "06ee70fab5cf44efd83bfad259cd521b40527274971bef4ceeff3cce1eec0bc9"
+}

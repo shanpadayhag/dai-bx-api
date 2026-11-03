@@ -1,0 +1,48 @@
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::features::cards::data_sources::postgres::card_source::PostgresCardSource;
+use crate::features::cards::entities::card::CardDetail;
+use crate::features::cards::error::CardError;
+
+pub struct FindCardDetail<'a> {
+    db_pool: &'a PgPool,
+    postgres_card_source: PostgresCardSource,
+}
+
+impl<'a> FindCardDetail<'a> {
+    pub fn new(db_pool: &'a PgPool) -> Self {
+        Self {
+            db_pool,
+            postgres_card_source: PostgresCardSource,
+        }
+    }
+
+    pub async fn execute(&self, user_id: Uuid, card_id: Uuid) -> Result<CardDetail, CardError> {
+        let mut card_connection = self.db_pool.acquire().await?;
+        let card_with_notes = self
+            .postgres_card_source
+            .find_with_notes(&mut *card_connection, user_id, card_id)
+            .await?
+            .ok_or(CardError::NotFound)?;
+        let mut card = card_with_notes.card;
+        card.values = self
+            .postgres_card_source
+            .list_values(&mut *card_connection, card_id)
+            .await?;
+        let linked_tasks = self
+            .postgres_card_source
+            .list_linked_tasks(&mut *card_connection, card_id)
+            .await?;
+        card.linked_task_count = linked_tasks.len() as i64;
+        card.done_linked_task_count = linked_tasks
+            .iter()
+            .filter(|linked_task| linked_task.is_done)
+            .count() as i64;
+        Ok(CardDetail {
+            card,
+            notes: card_with_notes.notes,
+            linked_tasks,
+        })
+    }
+}

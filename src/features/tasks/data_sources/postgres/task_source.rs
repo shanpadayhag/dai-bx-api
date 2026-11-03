@@ -1,7 +1,7 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
-use crate::features::tasks::entities::task::{NewTask, Task, TaskChanges};
+use crate::features::tasks::entities::task::{NewTask, Task, TaskCard, TaskChanges};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TaskPlace {
@@ -24,18 +24,59 @@ impl PostgresTaskSource {
         executor: impl PgExecutor<'_>,
         task_group_id: Uuid,
     ) -> Result<Vec<Task>, sqlx::Error> {
-        sqlx::query_as!(
-            Task,
-            r#"SELECT id,
-                      parent_id,
-                      position,
-                      name,
-                      completed_at IS NOT NULL AS "is_done!",
-                      estimate_minutes
+        let task_rows = sqlx::query!(
+            r#"SELECT tasks.id,
+                      tasks.parent_id,
+                      tasks.position,
+                      tasks.name,
+                      tasks.completed_at IS NOT NULL AS "is_done!",
+                      tasks.estimate_minutes,
+                      cards.id AS "card_id?",
+                      cards.title AS "card_title?",
+                      cards.board_id AS "card_board_id?"
                FROM tasks
-               WHERE group_id = $1
-               ORDER BY parent_id NULLS FIRST, position, id"#,
+               LEFT JOIN cards ON cards.id = tasks.card_id
+               WHERE tasks.group_id = $1
+               ORDER BY tasks.parent_id NULLS FIRST, tasks.position, tasks.id"#,
             task_group_id,
+        )
+        .fetch_all(executor)
+        .await?;
+        Ok(task_rows
+            .into_iter()
+            .map(|task_row| Task {
+                id: task_row.id,
+                parent_id: task_row.parent_id,
+                position: task_row.position,
+                name: task_row.name,
+                is_done: task_row.is_done,
+                estimate_minutes: task_row.estimate_minutes,
+                card: match (
+                    task_row.card_id,
+                    task_row.card_title,
+                    task_row.card_board_id,
+                ) {
+                    (Some(card_id), Some(card_title), Some(card_board_id)) => Some(TaskCard {
+                        id: card_id,
+                        title: card_title,
+                        board_id: card_board_id,
+                    }),
+                    _ => None,
+                },
+            })
+            .collect())
+    }
+
+    pub async fn find_owned_card_ids(
+        &self,
+        executor: impl PgExecutor<'_>,
+        user_id: Uuid,
+        card_ids: &[Uuid],
+    ) -> Result<Vec<Uuid>, sqlx::Error> {
+        sqlx::query_scalar!(
+            "SELECT id FROM cards WHERE user_id = $1 AND id = ANY($2)",
+            user_id,
+            card_ids,
         )
         .fetch_all(executor)
         .await
@@ -103,14 +144,15 @@ impl PostgresTaskSource {
         new_task: &NewTask,
     ) -> Result<(), sqlx::Error> {
         sqlx::query!(
-            "INSERT INTO tasks (id, user_id, group_id, parent_id, position, name)
-             VALUES ($1, $2, $3, $4, $5, $6)",
+            "INSERT INTO tasks (id, user_id, group_id, parent_id, position, name, card_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
             new_task.id,
             new_task.user_id,
             new_task.group_id,
             new_task.parent_id,
             new_task.position,
             new_task.name,
+            new_task.card_id,
         )
         .execute(executor)
         .await?;
@@ -161,11 +203,14 @@ impl PostgresTaskSource {
             .iter()
             .map(|new_task| new_task.name.as_str())
             .collect();
+        let card_ids: Vec<Option<Uuid>> =
+            new_tasks.iter().map(|new_task| new_task.card_id).collect();
         sqlx::query!(
-            r#"INSERT INTO tasks (id, user_id, group_id, parent_id, position, name)
-               SELECT new_task.id, $1, $2, new_task.parent_id, new_task.position, new_task.name
-               FROM UNNEST($3::uuid[], $4::uuid[], $5::integer[], $6::text[])
-                    WITH ORDINALITY AS new_task (id, parent_id, position, name, insert_order)
+            r#"INSERT INTO tasks (id, user_id, group_id, parent_id, position, name, card_id)
+               SELECT new_task.id, $1, $2, new_task.parent_id, new_task.position, new_task.name,
+                      new_task.card_id
+               FROM UNNEST($3::uuid[], $4::uuid[], $5::integer[], $6::text[], $7::uuid[])
+                    WITH ORDINALITY AS new_task (id, parent_id, position, name, card_id, insert_order)
                ORDER BY new_task.insert_order"#,
             user_id,
             task_group_id,
@@ -173,6 +218,7 @@ impl PostgresTaskSource {
             &parent_task_ids as &[Option<Uuid>],
             &positions,
             &task_names as &[&str],
+            &card_ids as &[Option<Uuid>],
         )
         .execute(executor)
         .await?;
@@ -484,6 +530,7 @@ pub mod tests {
             parent_id: parent_task_id,
             position: next_position,
             name: String::from("A task"),
+            card_id: None,
         };
         task_source
             .insert(db_pool, &new_task)

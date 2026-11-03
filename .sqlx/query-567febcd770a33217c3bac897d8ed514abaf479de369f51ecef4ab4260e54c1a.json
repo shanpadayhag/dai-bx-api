@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE cards\n             SET title = coalesce($3, title),\n                 notes = coalesce($4, notes),\n                 due_date = $5::text::date,\n                 due_time = $6::text::time,\n                 updated_at = now()\n             WHERE id = $2 AND board_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "567febcd770a33217c3bac897d8ed514abaf479de369f51ecef4ab4260e54c1a"
+}

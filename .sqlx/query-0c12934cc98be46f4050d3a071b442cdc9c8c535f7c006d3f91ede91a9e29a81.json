@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT board_id FROM cards WHERE id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "board_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "board_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0c12934cc98be46f4050d3a071b442cdc9c8c535f7c006d3f91ede91a9e29a81"
+}

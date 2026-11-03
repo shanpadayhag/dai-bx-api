@@ -1,16 +1,25 @@
 use serde_json::Value;
+use uuid::Uuid;
 
 use crate::features::tasks::entities::task::{MAX_TASK_DEPTH, TASK_NAME_MAX_CHARACTERS};
 
 pub const MAX_IMPORT_BYTES: usize = 1024 * 1024;
 pub const MAX_IMPORTED_TASKS: usize = 2000;
 const GROUP_NAME_MAX_CHARACTERS: usize = 200;
+pub const UNKNOWN_CARD_MESSAGE: &str = "no card of yours has that id";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardReference {
+    pub card_id: Uuid,
+    pub path: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportedTask {
     pub name: String,
     pub parent_index: Option<usize>,
     pub position: i32,
+    pub card_reference: Option<CardReference>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +70,26 @@ fn read_task_name(task_value: &Value, task_path: &str) -> Result<String, ImportP
     Ok(trimmed_name.to_owned())
 }
 
+fn read_card_reference(
+    task_value: &Value,
+    task_path: &str,
+) -> Result<Option<CardReference>, ImportProblem> {
+    let card_path = format!("{task_path}.card");
+    match task_value.get("card") {
+        None | Some(Value::Null) => Ok(None),
+        Some(card_value) => card_value
+            .as_str()
+            .and_then(|card_text| Uuid::parse_str(card_text.trim()).ok())
+            .map(|card_id| {
+                Some(CardReference {
+                    card_id,
+                    path: card_path.clone(),
+                })
+            })
+            .ok_or_else(|| problem_at(UNKNOWN_CARD_MESSAGE, card_path)),
+    }
+}
+
 fn read_task_list(
     tasks_value: Option<&Value>,
     tasks_path: &str,
@@ -86,11 +115,16 @@ fn read_task_list(
             return Err(problem_at("each task is a JSON object", task_path));
         }
         let task_name = read_task_name(task_value, &task_path)?;
+        let card_reference = match parent_index {
+            None => read_card_reference(task_value, &task_path)?,
+            Some(_) => None,
+        };
         let task_index = imported_tasks.len();
         imported_tasks.push(ImportedTask {
             name: task_name,
             parent_index,
             position: i32::try_from(sibling_index).unwrap_or(i32::MAX),
+            card_reference,
         });
         read_task_list(
             task_value.get("tasks"),
@@ -164,6 +198,54 @@ mod tests {
                 ("B", None, 1),
             ]
         );
+    }
+
+    #[test]
+    fn reads_card_references_on_top_level_tasks_only() {
+        let card_id = Uuid::now_v7();
+        let group_import = parse(json!({
+            "name": "Today",
+            "tasks": [
+                { "name": "Linked", "card": card_id.to_string(), "tasks": [
+                    { "name": "Step", "card": "not-even-checked", "tasks": [] },
+                ] },
+                { "name": "Unlinked", "card": null, "tasks": [] },
+            ],
+        }))
+        .expect("the file should parse");
+
+        let card_references: Vec<Option<CardReference>> = group_import
+            .tasks
+            .into_iter()
+            .map(|task| task.card_reference)
+            .collect();
+        assert_eq!(
+            card_references,
+            vec![
+                Some(CardReference {
+                    card_id,
+                    path: String::from("tasks[0].card"),
+                }),
+                None,
+                None,
+            ]
+        );
+    }
+
+    #[test]
+    fn reports_a_malformed_card_reference_where_it_is() {
+        for bad_card in [json!("not-a-uuid"), json!(42), json!({ "id": "x" })] {
+            assert_eq!(
+                parse(json!({
+                    "name": "Today",
+                    "tasks": [
+                        { "name": "A", "tasks": [] },
+                        { "name": "B", "card": bad_card, "tasks": [] },
+                    ],
+                })),
+                Err(problem_at(UNKNOWN_CARD_MESSAGE, "tasks[1].card"))
+            );
+        }
     }
 
     #[test]

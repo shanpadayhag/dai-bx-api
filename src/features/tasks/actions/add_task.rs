@@ -59,6 +59,7 @@ impl<'a> AddTask<'a> {
                     parent_id: parent_task_id,
                     position: next_position,
                     name: task_name.to_owned(),
+                    card_id: None,
                 },
             )
             .await?;

@@ -1,6 +1,8 @@
 use serde::Serialize;
 
-use crate::features::tasks::entities::task::{AffectedGroup, GroupTasks, MovedTask, Task};
+use crate::features::tasks::entities::task::{
+    AffectedGroup, GroupTasks, MovedTask, Task, TaskCard,
+};
 
 #[derive(Debug, Serialize)]
 pub struct GroupResponse {
@@ -17,6 +19,25 @@ pub struct TaskResponse {
     pub name: String,
     pub is_done: bool,
     pub estimate_minutes: Option<i32>,
+    pub card: Option<TaskCardResponse>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskCardResponse {
+    pub id: String,
+    pub title: String,
+    pub board_id: String,
+}
+
+impl From<TaskCard> for TaskCardResponse {
+    fn from(task_card: TaskCard) -> Self {
+        Self {
+            id: task_card.id.to_string(),
+            title: task_card.title,
+            board_id: task_card.board_id.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -37,6 +58,7 @@ impl From<Task> for TaskResponse {
             name: task.name,
             is_done: task.is_done,
             estimate_minutes: task.estimate_minutes,
+            card: task.card.map(TaskCardResponse::from),
         }
     }
 }

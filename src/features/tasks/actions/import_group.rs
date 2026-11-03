@@ -1,10 +1,12 @@
+use std::collections::HashSet;
+
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::features::task_groups::actions::create_task_group::CreateTaskGroup;
 use crate::features::task_groups::entities::task_group::TaskGroupDetails;
 use crate::features::tasks::data_sources::postgres::task_source::PostgresTaskSource;
-use crate::features::tasks::entities::group_import::GroupImport;
+use crate::features::tasks::entities::group_import::{GroupImport, UNKNOWN_CARD_MESSAGE};
 use crate::features::tasks::entities::task::{GroupTasks, NewTask};
 use crate::features::tasks::error::TaskError;
 
@@ -29,6 +31,10 @@ fn new_tasks_for(group_import: &GroupImport, user_id: Uuid, task_group_id: Uuid)
                 .and_then(|parent_index| task_ids.get(parent_index).copied()),
             position: imported_task.position,
             name: imported_task.name.clone(),
+            card_id: imported_task
+                .card_reference
+                .as_ref()
+                .map(|card_reference| card_reference.card_id),
         })
         .collect()
 }
@@ -48,6 +54,32 @@ impl<'a> ImportGroup<'a> {
         group_import: &GroupImport,
     ) -> Result<GroupTasks, TaskError> {
         let mut import_transaction = self.db_pool.begin().await?;
+        let card_references: Vec<_> = group_import
+            .tasks
+            .iter()
+            .filter_map(|imported_task| imported_task.card_reference.as_ref())
+            .collect();
+        if !card_references.is_empty() {
+            let referenced_card_ids: Vec<Uuid> = card_references
+                .iter()
+                .map(|card_reference| card_reference.card_id)
+                .collect();
+            let owned_card_ids: HashSet<Uuid> = self
+                .postgres_task_source
+                .find_owned_card_ids(&mut *import_transaction, user_id, &referenced_card_ids)
+                .await?
+                .into_iter()
+                .collect();
+            if let Some(unknown_card_reference) = card_references
+                .iter()
+                .find(|card_reference| !owned_card_ids.contains(&card_reference.card_id))
+            {
+                return Err(TaskError::InvalidAt {
+                    message: UNKNOWN_CARD_MESSAGE.to_owned(),
+                    path: unknown_card_reference.path.clone(),
+                });
+            }
+        }
         let created_task_group = self
             .create_task_group
             .execute(&mut *import_transaction, user_id, &group_import.name)

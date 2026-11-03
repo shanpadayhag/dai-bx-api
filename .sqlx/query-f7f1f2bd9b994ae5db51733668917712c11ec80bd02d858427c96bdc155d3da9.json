@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT property_options.property_id,\n                      property_options.position,\n                      (SELECT count(*)::integer\n                       FROM property_options AS sibling_options\n                       WHERE sibling_options.property_id = property_options.property_id) AS \"option_count!\"\n               FROM property_options\n               JOIN board_properties ON board_properties.id = property_options.property_id\n               WHERE property_options.id = $2 AND board_properties.board_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "property_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "property_options",
+            "name": "property_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "position",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "property_options",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "option_count!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "f7f1f2bd9b994ae5db51733668917712c11ec80bd02d858427c96bdc155d3da9"
+}

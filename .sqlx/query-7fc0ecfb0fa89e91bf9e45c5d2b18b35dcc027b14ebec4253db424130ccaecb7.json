@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE property_options\n                 SET name = coalesce($3::text::citext, property_options.name),\n                     color = CASE WHEN $4::boolean THEN $5 ELSE property_options.color END,\n                     updated_at = now()\n                 FROM board_properties\n                 WHERE property_options.id = $2\n                   AND board_properties.id = property_options.property_id\n                   AND board_properties.board_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7fc0ecfb0fa89e91bf9e45c5d2b18b35dcc027b14ebec4253db424130ccaecb7"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE board_lists SET name = $3, updated_at = now() WHERE id = $2 AND board_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "170d461eb74bf6e25d9b64e3009230e6893e37e5a5dec80b6d409ea97430e0a3"
+}

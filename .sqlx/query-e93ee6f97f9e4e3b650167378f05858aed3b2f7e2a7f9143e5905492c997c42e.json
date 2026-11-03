@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT board_properties.board_id\n             FROM property_options\n             JOIN board_properties ON board_properties.id = property_options.property_id\n             WHERE property_options.id = $1 AND property_options.user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "board_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "board_properties",
+            "name": "board_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e93ee6f97f9e4e3b650167378f05858aed3b2f7e2a7f9143e5905492c997c42e"
+}

@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT position,\n                      (SELECT count(*)::integer FROM board_lists WHERE board_id = $1) AS \"list_count!\"\n               FROM board_lists\n               WHERE id = $2 AND board_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "board_lists",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "list_count!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "ccb434c35ea12b32c1121b4031b94aeacb78cde29f5165ca2fb6458464aa590e"
+}

@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT card_property_values.card_id,\n                      board_properties.name::text AS \"property_name!\",\n                      coalesce(property_options.name::text,\n                               card_property_values.text_value,\n                               card_property_values.number_value::text) AS \"value!\"\n               FROM card_property_values\n               JOIN cards ON cards.id = card_property_values.card_id\n               JOIN board_properties ON board_properties.id = card_property_values.property_id\n               LEFT JOIN property_options ON property_options.id = card_property_values.option_id\n               WHERE cards.list_id = $1\n               ORDER BY card_property_values.card_id, board_properties.position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "card_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_property_values",
+            "name": "card_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "property_name!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "value!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "2703e9ef412b7d2e0861b98b354cc55ac27602e4ac2338ed5b93cf0a029568a8"
+}

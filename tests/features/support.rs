@@ -140,6 +140,22 @@ pub async fn patch_json_with_cookies(
     .await
 }
 
+pub async fn put_json_with_cookies(
+    test_app: Router,
+    request_path: &str,
+    request_body: serde_json::Value,
+    cookie_header: &str,
+) -> Response<Body> {
+    send_json_with_cookies(
+        test_app,
+        Method::PUT,
+        request_path,
+        request_body,
+        cookie_header,
+    )
+    .await
+}
+
 pub async fn delete_with_cookies(
     test_app: Router,
     request_path: &str,

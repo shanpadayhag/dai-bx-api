@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO property_options (id, user_id, property_id, position, name, color)\n                 SELECT $1, $2, $3, coalesce(max(position) + 1, 0), $4::text::citext, $5\n                 FROM property_options\n                 WHERE property_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5965b6a5b3aa0368151bb87179f92b2bf09429b72b213dbb054bf59df85799c7"
+}

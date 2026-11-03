@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT board_id FROM board_properties WHERE id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "board_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "board_properties",
+            "name": "board_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ca44c0f3ee81a8af07807202f4f64ce6dca2f192c1695e63486037256997537f"
+}

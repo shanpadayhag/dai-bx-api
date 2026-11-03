@@ -9,7 +9,7 @@ use crate::support::{
 };
 use crate::tasks::create::find_task_named;
 
-async fn import_group(
+pub async fn import_group(
     db_pool: &PgPool,
     signed_in_person: &SignedInPerson,
     import_file: serde_json::Value,
@@ -23,7 +23,7 @@ async fn import_group(
     .await
 }
 
-async fn list_group_names(db_pool: &PgPool, signed_in_person: &SignedInPerson) -> Vec<String> {
+pub async fn list_group_names(db_pool: &PgPool, signed_in_person: &SignedInPerson) -> Vec<String> {
     response_json(
         get_with_cookies(
             build_test_app(db_pool.clone()),

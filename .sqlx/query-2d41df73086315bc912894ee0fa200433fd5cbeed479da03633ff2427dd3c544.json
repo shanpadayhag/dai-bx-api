@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE property_options SET position = position - 1 WHERE property_id = $1 AND position > $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d41df73086315bc912894ee0fa200433fd5cbeed479da03633ff2427dd3c544"
+}

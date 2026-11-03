@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT boards.name AS board_name, board_lists.name AS list_name\n             FROM board_lists\n             JOIN boards ON boards.id = board_lists.board_id\n             WHERE board_lists.id = $1 AND board_lists.user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "board_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "boards",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "list_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "board_lists",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "644e105c03ae043d093125adfb94d0d60c569cb86089d291e5aaeaf2fdee40c4"
+}

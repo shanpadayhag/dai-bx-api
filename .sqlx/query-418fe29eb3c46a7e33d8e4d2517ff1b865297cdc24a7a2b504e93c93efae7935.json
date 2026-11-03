@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE board_properties SET name = $3::text::citext, updated_at = now()\n                 WHERE id = $2 AND board_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "418fe29eb3c46a7e33d8e4d2517ff1b865297cdc24a7a2b504e93c93efae7935"
+}

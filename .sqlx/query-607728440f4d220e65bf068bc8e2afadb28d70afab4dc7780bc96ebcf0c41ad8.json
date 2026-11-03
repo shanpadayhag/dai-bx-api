@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE cards\n             SET position = CASE\n                     WHEN id = $2 THEN $4::integer\n                     WHEN $3::integer < $4::integer THEN position - 1\n                     ELSE position + 1\n                 END,\n                 updated_at = CASE WHEN id = $2 THEN now() ELSE updated_at END\n             WHERE list_id = $1\n               AND (id = $2 OR position BETWEEN least($3::integer, $4::integer)\n                                            AND greatest($3::integer, $4::integer))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "607728440f4d220e65bf068bc8e2afadb28d70afab4dc7780bc96ebcf0c41ad8"
+}

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO property_options (id, user_id, property_id, position, name, color)\n                 SELECT new_options.option_id, $1, $2, (new_options.option_number - 1)::integer,\n                        new_options.option_name, new_options.option_color\n                 FROM unnest($3::uuid[], $4::text[], $5::text[])\n                      WITH ORDINALITY AS new_options (option_id, option_name, option_color, option_number)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "27db01c1e6ce91ca41ca6d7fbdcdb4994c3b6cbeead32434872f8e0c59d5fb84"
+}

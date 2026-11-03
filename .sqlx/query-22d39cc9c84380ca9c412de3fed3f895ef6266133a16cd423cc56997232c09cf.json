@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE board_properties\n             SET position = CASE\n                     WHEN id = $2 THEN $4::integer\n                     WHEN $3::integer < $4::integer THEN position - 1\n                     ELSE position + 1\n                 END,\n                 updated_at = CASE WHEN id = $2 THEN now() ELSE updated_at END\n             WHERE board_id = $1\n               AND (id = $2 OR position BETWEEN least($3::integer, $4::integer)\n                                    AND greatest($3::integer, $4::integer))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "22d39cc9c84380ca9c412de3fed3f895ef6266133a16cd423cc56997232c09cf"
+}

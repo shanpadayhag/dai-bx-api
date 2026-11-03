@@ -1,6 +1,10 @@
 pub mod account;
 pub mod auth;
 pub mod auth_challenges;
+pub mod board_lists;
+pub mod board_properties;
+pub mod boards;
+pub mod cards;
 pub mod categories;
 pub mod email;
 pub mod email_tokens;

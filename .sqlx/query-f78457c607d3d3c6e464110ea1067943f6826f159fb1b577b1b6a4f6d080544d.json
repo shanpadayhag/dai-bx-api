@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT kind AS \"kind: BoardPropertyKind\"\n               FROM board_properties\n               WHERE id = $2 AND board_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind: BoardPropertyKind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "board_properties",
+            "name": "kind"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f78457c607d3d3c6e464110ea1067943f6826f159fb1b577b1b6a4f6d080544d"
+}

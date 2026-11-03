@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE property_options\n             SET position = CASE\n                     WHEN id = $2 THEN $4::integer\n                     WHEN $3::integer < $4::integer THEN position - 1\n                     ELSE position + 1\n                 END,\n                 updated_at = CASE WHEN id = $2 THEN now() ELSE updated_at END\n             WHERE property_id = $1\n               AND (id = $2 OR position BETWEEN least($3::integer, $4::integer)\n                                    AND greatest($3::integer, $4::integer))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a524f7e7d3f1371364be1f1d929adb26f1e50dafa79dcb5ff230fb5411698986"
+}

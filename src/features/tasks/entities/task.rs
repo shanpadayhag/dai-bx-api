@@ -7,7 +7,14 @@ pub const TASK_NAME_MAX_CHARACTERS: usize = 500;
 pub const MAX_TASK_DEPTH: i32 = 32;
 pub const ESTIMATE_MINUTES_RANGE: std::ops::RangeInclusive<i64> = 1..=1440;
 
-#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskCard {
+    pub id: Uuid,
+    pub title: String,
+    pub board_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Task {
     pub id: Uuid,
     pub parent_id: Option<Uuid>,
@@ -15,6 +22,7 @@ pub struct Task {
     pub name: String,
     pub is_done: bool,
     pub estimate_minutes: Option<i32>,
+    pub card: Option<TaskCard>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +33,7 @@ pub struct NewTask {
     pub parent_id: Option<Uuid>,
     pub position: i32,
     pub name: String,
+    pub card_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -103,6 +112,7 @@ mod tests {
             name: String::from("A task"),
             is_done,
             estimate_minutes: None,
+            card: None,
         }
     }
 
