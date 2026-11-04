@@ -26,6 +26,7 @@ async fn reads_a_card_with_its_notes_and_linked_tasks(db_pool: PgPool) {
             "card": card(&board, "Plan"),
             "notes": NEW_CARD_NOTES,
             "linkedTasks": [],
+            "trackedEventCount": 0,
         })
     );
 }

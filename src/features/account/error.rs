@@ -41,6 +41,8 @@ pub enum AccountError {
     SessionAlreadyEnded,
     #[error("account no longer exists")]
     NotSignedIn,
+    #[error("category not found")]
+    CategoryNotFound,
     #[error(transparent)]
     PasswordPolicy(#[from] PasswordPolicyError),
     #[error("blocked for {retry_after_seconds} seconds")]
@@ -140,6 +142,7 @@ impl From<AccountError> for AppError {
                 AppError::Validation(String::from("that session has already ended"))
             }
             AccountError::NotSignedIn => AppError::Unauthorized,
+            AccountError::CategoryNotFound => AppError::NotFound,
             AccountError::PasswordPolicy(password_policy_error) => password_policy_error.into(),
             AccountError::Throttled {
                 retry_after_seconds,

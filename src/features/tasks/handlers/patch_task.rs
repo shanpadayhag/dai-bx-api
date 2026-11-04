@@ -19,6 +19,8 @@ pub struct PatchTaskRequest {
     pub name: Option<String>,
     #[serde(default, deserialize_with = "deserialize_present_field")]
     pub estimate_minutes: Option<Option<i64>>,
+    #[serde(default)]
+    pub rename_events: bool,
 }
 
 pub async fn patch_task(
@@ -40,7 +42,12 @@ pub async fn patch_task(
             .transpose()?,
     };
     let group_tasks = UpdateTask::new(&app_state.db_pool)
-        .execute(write_session.user_id, task_id, &task_changes)
+        .execute(
+            write_session.user_id,
+            task_id,
+            &task_changes,
+            patch_request.rename_events,
+        )
         .await?;
     Ok(Json(group_tasks.into()))
 }

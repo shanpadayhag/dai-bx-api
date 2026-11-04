@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_events\n             SET ends_at = now(), finished_at = now(), updated_at = now()\n             WHERE calendar_events.user_id = $1\n               AND calendar_events.ends_at IS NULL\n               AND (\n                   calendar_events.task_id = $2\n                   OR calendar_events.card_id = $4\n                   OR EXISTS (\n                       SELECT FROM tasks\n                       WHERE tasks.id = calendar_events.task_id AND tasks.group_id = $3\n                   )\n                   OR EXISTS (\n                       SELECT FROM cards\n                       WHERE cards.id = calendar_events.card_id\n                         AND (cards.list_id = $5 OR cards.board_id = $6)\n                   )\n               )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d36937d7af23cfe8bbe234d1b44b03fdc487a1164285a4e6e857a4b0360f2d96"
+}

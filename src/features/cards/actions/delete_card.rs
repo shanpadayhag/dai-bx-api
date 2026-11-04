@@ -3,6 +3,8 @@ use uuid::Uuid;
 
 use crate::features::boards::actions::build_board::BuildBoard;
 use crate::features::boards::entities::board::Board;
+use crate::features::calendar_events::actions::close_running_events::CloseRunningEvents;
+use crate::features::calendar_events::entities::calendar_event::ClosingScope;
 use crate::features::cards::actions::lock_board_of_card::LockBoardOfCard;
 use crate::features::cards::data_sources::postgres::card_source::PostgresCardSource;
 use crate::features::cards::error::CardError;
@@ -10,6 +12,7 @@ use crate::features::cards::error::CardError;
 pub struct DeleteCard<'a> {
     db_pool: &'a PgPool,
     lock_board_of_card: LockBoardOfCard,
+    close_running_events: CloseRunningEvents,
     build_board: BuildBoard,
     postgres_card_source: PostgresCardSource,
 }
@@ -19,6 +22,7 @@ impl<'a> DeleteCard<'a> {
         Self {
             db_pool,
             lock_board_of_card: LockBoardOfCard::new(),
+            close_running_events: CloseRunningEvents::new(),
             build_board: BuildBoard::new(),
             postgres_card_source: PostgresCardSource,
         }
@@ -29,6 +33,13 @@ impl<'a> DeleteCard<'a> {
         let board_summary = self
             .lock_board_of_card
             .execute(&mut delete_transaction, user_id, card_id)
+            .await?;
+        self.close_running_events
+            .execute(
+                &mut delete_transaction,
+                user_id,
+                ClosingScope::Card(card_id),
+            )
             .await?;
         let removed_place = self
             .postgres_card_source

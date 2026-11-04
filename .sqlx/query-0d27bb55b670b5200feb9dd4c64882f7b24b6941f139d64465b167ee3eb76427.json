@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO calendar_events\n                 (id, user_id, kind, title, category_id, task_id, card_id, starts_at)\n             SELECT $1, users.id, 'tracked', $3, users.tracked_category_id, $4, $5, now()\n             FROM users\n             WHERE users.id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0d27bb55b670b5200feb9dd4c64882f7b24b6941f139d64465b167ee3eb76427"
+}

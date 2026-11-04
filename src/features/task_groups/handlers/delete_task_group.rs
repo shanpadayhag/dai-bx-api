@@ -14,8 +14,8 @@ pub async fn delete_task_group(
     Path(task_group_id_text): Path<String>,
 ) -> Result<Json<DeletedResponse>, AppError> {
     let task_group_id = Uuid::parse_str(&task_group_id_text).map_err(|_| AppError::NotFound)?;
-    DeleteTaskGroup::new()
-        .execute(&app_state.db_pool, write_session.user_id, task_group_id)
+    DeleteTaskGroup::new(&app_state.db_pool)
+        .execute(write_session.user_id, task_group_id)
         .await?;
     Ok(Json(DeletedResponse::deleted()))
 }

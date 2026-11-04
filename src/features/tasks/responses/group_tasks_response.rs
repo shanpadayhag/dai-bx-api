@@ -20,6 +20,7 @@ pub struct TaskResponse {
     pub is_done: bool,
     pub estimate_minutes: Option<i32>,
     pub card: Option<TaskCardResponse>,
+    pub tracked_event_count: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -59,6 +60,7 @@ impl From<Task> for TaskResponse {
             is_done: task.is_done,
             estimate_minutes: task.estimate_minutes,
             card: task.card.map(TaskCardResponse::from),
+            tracked_event_count: task.tracked_event_count,
         }
     }
 }

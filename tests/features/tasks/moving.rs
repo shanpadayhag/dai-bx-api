@@ -11,7 +11,7 @@ use crate::tasks::create::{
     add_task, add_task_chain, create_group_id, find_task_named, task_id_named,
 };
 
-async fn move_task(
+pub async fn move_task(
     db_pool: &PgPool,
     signed_in_person: &SignedInPerson,
     task_id: &str,

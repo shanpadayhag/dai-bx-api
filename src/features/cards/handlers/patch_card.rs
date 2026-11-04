@@ -25,6 +25,8 @@ pub struct PatchCardRequest {
     pub due_date: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_present_field")]
     pub due_time: Option<Option<String>>,
+    #[serde(default)]
+    pub rename_events: bool,
 }
 
 pub async fn patch_card(
@@ -53,7 +55,12 @@ pub async fn patch_card(
             .transpose()?,
     };
     let board = UpdateCard::new(&app_state.db_pool)
-        .execute(write_session.user_id, card_id, &card_changes)
+        .execute(
+            write_session.user_id,
+            card_id,
+            &card_changes,
+            patch_request.rename_events,
+        )
         .await?;
     Ok(Json(board.into()))
 }

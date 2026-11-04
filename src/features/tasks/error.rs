@@ -1,4 +1,5 @@
 use crate::core::error::AppError;
+use crate::features::calendar_events::error::CalendarEventError;
 use crate::features::task_groups::error::TaskGroupError;
 use crate::features::tasks::entities::group_import::ImportProblem;
 
@@ -40,6 +41,19 @@ impl From<ImportProblem> for TaskError {
         TaskError::InvalidAt {
             message: import_problem.message.to_owned(),
             path: import_problem.path,
+        }
+    }
+}
+
+impl From<CalendarEventError> for TaskError {
+    fn from(calendar_event_error: CalendarEventError) -> Self {
+        match calendar_event_error {
+            CalendarEventError::Invalid(invalid_message) => TaskError::Invalid(invalid_message),
+            CalendarEventError::NotFound => TaskError::NotFound,
+            CalendarEventError::AlreadyRunning => {
+                TaskError::Invalid(String::from("this is already running"))
+            }
+            CalendarEventError::Database(database_error) => TaskError::Database(database_error),
         }
     }
 }

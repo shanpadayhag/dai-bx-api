@@ -43,6 +43,7 @@ impl<'a> FindCardDetail<'a> {
             card,
             notes: card_with_notes.notes,
             linked_tasks,
+            tracked_event_count: card_with_notes.tracked_event_count,
         })
     }
 }

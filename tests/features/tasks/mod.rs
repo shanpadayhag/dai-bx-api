@@ -3,6 +3,6 @@ pub mod completion;
 pub mod create;
 mod delete;
 pub mod import;
-mod moving;
+pub mod moving;
 mod read;
 mod update;

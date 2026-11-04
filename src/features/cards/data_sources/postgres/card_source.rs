@@ -25,6 +25,21 @@ impl PostgresCardSource {
         .await
     }
 
+    pub async fn find_title(
+        &self,
+        executor: impl PgExecutor<'_>,
+        user_id: Uuid,
+        card_id: Uuid,
+    ) -> Result<Option<String>, sqlx::Error> {
+        sqlx::query_scalar!(
+            "SELECT title FROM cards WHERE id = $1 AND user_id = $2",
+            card_id,
+            user_id,
+        )
+        .fetch_optional(executor)
+        .await
+    }
+
     pub async fn insert_last(
         &self,
         executor: impl PgExecutor<'_>,
@@ -61,7 +76,10 @@ impl PostgresCardSource {
                       title,
                       notes,
                       to_char(due_date, 'YYYY-MM-DD') AS due_date,
-                      to_char(due_time, 'HH24:MI') AS due_time
+                      to_char(due_time, 'HH24:MI') AS due_time,
+                      (SELECT count(*)
+                       FROM calendar_events
+                       WHERE calendar_events.card_id = cards.id) AS "tracked_event_count!"
                FROM cards
                WHERE id = $1 AND user_id = $2"#,
             card_id,
@@ -82,6 +100,7 @@ impl PostgresCardSource {
                 done_linked_task_count: 0,
             },
             notes: card_row.notes,
+            tracked_event_count: card_row.tracked_event_count,
         }))
     }
 
@@ -401,6 +420,33 @@ pub mod tests {
             .zip(0..)
             .map(|(card_title, position)| ((*card_title).to_owned(), position))
             .collect()
+    }
+
+    #[sqlx::test]
+    async fn reads_the_title_of_only_the_owner_s_card(db_pool: PgPool) {
+        let owner_id = seed_user_id(&db_pool, "owner@example.com").await;
+        let other_person_id = seed_user_id(&db_pool, "other@example.com").await;
+        let board = seed_board_with_lists(&db_pool, owner_id, &["Backlog"]).await;
+        let card_id = seed_card(
+            &db_pool,
+            owner_id,
+            board.board.id,
+            board.lists[0].id,
+            "Plan",
+        )
+        .await;
+
+        let owner_title = PostgresCardSource
+            .find_title(&db_pool, owner_id, card_id)
+            .await
+            .expect("the read should run");
+        let foreign_title = PostgresCardSource
+            .find_title(&db_pool, other_person_id, card_id)
+            .await
+            .expect("the read should run");
+
+        assert_eq!(owner_title.as_deref(), Some("Plan"));
+        assert_eq!(foreign_title, None);
     }
 
     #[sqlx::test]

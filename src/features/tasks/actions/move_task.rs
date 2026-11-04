@@ -1,6 +1,8 @@
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
+use crate::features::calendar_events::actions::close_running_events::CloseRunningEvents;
+use crate::features::calendar_events::entities::calendar_event::ClosingScope;
 use crate::features::task_groups::actions::lock_task_group::LockTaskGroup;
 use crate::features::task_groups::entities::task_group::TaskGroupDetails;
 use crate::features::tasks::data_sources::postgres::task_source::{PostgresTaskSource, TaskPlace};
@@ -19,6 +21,7 @@ pub struct MoveTarget {
 pub struct MoveTask<'a> {
     db_pool: &'a PgPool,
     lock_task_group: LockTaskGroup,
+    close_running_events: CloseRunningEvents,
     postgres_task_source: PostgresTaskSource,
 }
 
@@ -27,6 +30,7 @@ impl<'a> MoveTask<'a> {
         Self {
             db_pool,
             lock_task_group: LockTaskGroup::new(),
+            close_running_events: CloseRunningEvents::new(),
             postgres_task_source: PostgresTaskSource,
         }
     }
@@ -65,6 +69,9 @@ impl<'a> MoveTask<'a> {
                 parent_task_id,
             )
             .await?;
+            self.close_running_events
+                .execute(&mut move_transaction, user_id, ClosingScope::Task(task_id))
+                .await?;
         }
         self.postgres_task_source
             .close_position_gap(&mut *move_transaction, source_group_id, source_place)

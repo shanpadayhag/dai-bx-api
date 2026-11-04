@@ -14,8 +14,8 @@ pub async fn delete_board(
     Path(board_id_text): Path<String>,
 ) -> Result<Json<DeletedResponse>, AppError> {
     let board_id = Uuid::parse_str(&board_id_text).map_err(|_| AppError::NotFound)?;
-    DeleteBoard::new()
-        .execute(&app_state.db_pool, write_session.user_id, board_id)
+    DeleteBoard::new(&app_state.db_pool)
+        .execute(write_session.user_id, board_id)
         .await?;
     Ok(Json(DeletedResponse::deleted()))
 }

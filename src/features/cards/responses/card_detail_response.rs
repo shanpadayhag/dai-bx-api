@@ -19,6 +19,7 @@ pub struct CardDetailResponse {
     pub card: BoardCardResponse,
     pub notes: String,
     pub linked_tasks: Vec<LinkedTaskResponse>,
+    pub tracked_event_count: i64,
 }
 
 impl From<LinkedTask> for LinkedTaskResponse {
@@ -43,6 +44,7 @@ impl From<CardDetail> for CardDetailResponse {
                 .into_iter()
                 .map(LinkedTaskResponse::from)
                 .collect(),
+            tracked_event_count: card_detail.tracked_event_count,
         }
     }
 }

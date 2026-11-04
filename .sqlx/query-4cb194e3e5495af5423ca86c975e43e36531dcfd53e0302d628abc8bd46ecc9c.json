@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id,\n                      list_id,\n                      position,\n                      title,\n                      notes,\n                      to_char(due_date, 'YYYY-MM-DD') AS due_date,\n                      to_char(due_time, 'HH24:MI') AS due_time\n               FROM cards\n               WHERE id = $1 AND user_id = $2",
+  "query": "SELECT id,\n                      list_id,\n                      position,\n                      title,\n                      notes,\n                      to_char(due_date, 'YYYY-MM-DD') AS due_date,\n                      to_char(due_time, 'HH24:MI') AS due_time,\n                      (SELECT count(*)\n                       FROM calendar_events\n                       WHERE calendar_events.card_id = cards.id) AS \"tracked_event_count!\"\n               FROM cards\n               WHERE id = $1 AND user_id = $2",
   "describe": {
     "columns": [
       {
@@ -69,6 +69,12 @@
         "name": "due_time",
         "type_info": "Text",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "tracked_event_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -84,8 +90,9 @@
       false,
       false,
       null,
+      null,
       null
     ]
   },
-  "hash": "c449598271e0b93f35c697c4811173ad12558824fbf40d4db1cf66886aa05355"
+  "hash": "4cb194e3e5495af5423ca86c975e43e36531dcfd53e0302d628abc8bd46ecc9c"
 }

@@ -1,0 +1,126 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT calendar_events.id AS \"id!\",\n                      calendar_events.title AS \"title!\",\n                      calendar_events.category_id,\n                      calendar_events.task_id,\n                      tasks.group_id AS \"task_group_id?\",\n                      tasks.estimate_minutes AS \"task_estimate_minutes?\",\n                      calendar_events.card_id,\n                      cards.board_id AS \"card_board_id?\",\n                      (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS \"starts_at_millis!\",\n                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis\n               FROM calendar_events\n               LEFT JOIN tasks ON tasks.id = calendar_events.task_id\n               LEFT JOIN cards ON cards.id = calendar_events.card_id\n               WHERE calendar_events.user_id = $1 AND calendar_events.ends_at IS NULL\n               ORDER BY calendar_events.starts_at DESC, calendar_events.id DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "calendar_events",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "calendar_events",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "category_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "calendar_events",
+            "name": "category_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "task_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "calendar_events",
+            "name": "task_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "task_group_id?",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tasks",
+            "name": "group_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "task_estimate_minutes?",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tasks",
+            "name": "estimate_minutes"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "card_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "calendar_events",
+            "name": "card_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "card_board_id?",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "board_id"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "starts_at_millis!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "last_answered_at_millis",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "a21e17856d8dac952b3f86ab711b7dc79437380dc69d1d382c50539eea1454e0"
+}

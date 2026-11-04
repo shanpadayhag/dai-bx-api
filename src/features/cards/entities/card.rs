@@ -32,6 +32,7 @@ pub struct LinkedTask {
 pub struct CardWithNotes {
     pub card: BoardCard,
     pub notes: String,
+    pub tracked_event_count: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +40,7 @@ pub struct CardDetail {
     pub card: BoardCard,
     pub notes: String,
     pub linked_tasks: Vec<LinkedTask>,
+    pub tracked_event_count: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -23,6 +23,20 @@ pub struct Task {
     pub is_done: bool,
     pub estimate_minutes: Option<i32>,
     pub card: Option<TaskCard>,
+    pub tracked_event_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrackableTask {
+    pub name: String,
+    pub is_top_level: bool,
+    pub is_done: bool,
+}
+
+impl TrackableTask {
+    pub fn can_start(&self) -> bool {
+        self.is_top_level && !self.is_done
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +127,7 @@ mod tests {
             is_done,
             estimate_minutes: None,
             card: None,
+            tracked_event_count: 0,
         }
     }
 

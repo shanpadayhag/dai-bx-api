@@ -1,7 +1,7 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
-use crate::features::tasks::entities::task::{NewTask, Task, TaskCard, TaskChanges};
+use crate::features::tasks::entities::task::{NewTask, Task, TaskCard, TaskChanges, TrackableTask};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TaskPlace {
@@ -33,7 +33,10 @@ impl PostgresTaskSource {
                       tasks.estimate_minutes,
                       cards.id AS "card_id?",
                       cards.title AS "card_title?",
-                      cards.board_id AS "card_board_id?"
+                      cards.board_id AS "card_board_id?",
+                      (SELECT count(*)
+                       FROM calendar_events
+                       WHERE calendar_events.task_id = tasks.id) AS "tracked_event_count!"
                FROM tasks
                LEFT JOIN cards ON cards.id = tasks.card_id
                WHERE tasks.group_id = $1
@@ -63,6 +66,7 @@ impl PostgresTaskSource {
                     }),
                     _ => None,
                 },
+                tracked_event_count: task_row.tracked_event_count,
             })
             .collect())
     }
@@ -90,6 +94,26 @@ impl PostgresTaskSource {
     ) -> Result<Option<Uuid>, sqlx::Error> {
         sqlx::query_scalar!(
             "SELECT group_id FROM tasks WHERE id = $1 AND user_id = $2",
+            task_id,
+            user_id,
+        )
+        .fetch_optional(executor)
+        .await
+    }
+
+    pub async fn find_trackable(
+        &self,
+        executor: impl PgExecutor<'_>,
+        user_id: Uuid,
+        task_id: Uuid,
+    ) -> Result<Option<TrackableTask>, sqlx::Error> {
+        sqlx::query_as!(
+            TrackableTask,
+            r#"SELECT name,
+                      parent_id IS NULL AS "is_top_level!",
+                      completed_at IS NOT NULL AS "is_done!"
+               FROM tasks
+               WHERE id = $1 AND user_id = $2"#,
             task_id,
             user_id,
         )
@@ -537,6 +561,57 @@ pub mod tests {
             .await
             .expect("the task should be inserted");
         new_task.id
+    }
+
+    #[sqlx::test]
+    async fn reads_whether_the_owner_s_task_is_top_level_and_done(db_pool: PgPool) {
+        let owner_id = seed_user_id(&db_pool, "owner@example.com").await;
+        let other_person_id = seed_user_id(&db_pool, "other@example.com").await;
+        let task_group = seed_task_group(&db_pool, owner_id).await;
+        let top_level_task_id = seed_task(&db_pool, owner_id, task_group.id, None).await;
+        let subtask_id =
+            seed_task(&db_pool, owner_id, task_group.id, Some(top_level_task_id)).await;
+        let done_task_id = seed_task(&db_pool, owner_id, task_group.id, None).await;
+        PostgresTaskSource
+            .complete_task_and_descendants(&db_pool, task_group.id, done_task_id)
+            .await
+            .expect("completing should run");
+
+        let mut trackable_tasks = Vec::new();
+        for task_id in [top_level_task_id, subtask_id, done_task_id] {
+            trackable_tasks.push(
+                PostgresTaskSource
+                    .find_trackable(&db_pool, owner_id, task_id)
+                    .await
+                    .expect("the read should run")
+                    .expect("the task should be found"),
+            );
+        }
+        let foreign_read = PostgresTaskSource
+            .find_trackable(&db_pool, other_person_id, top_level_task_id)
+            .await
+            .expect("the read should run");
+
+        let start_answers: Vec<(bool, bool, bool)> = trackable_tasks
+            .iter()
+            .map(|trackable_task| {
+                (
+                    trackable_task.is_top_level,
+                    trackable_task.is_done,
+                    trackable_task.can_start(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            start_answers,
+            vec![
+                (true, false, true),
+                (false, false, false),
+                (true, true, false)
+            ]
+        );
+        assert_eq!(trackable_tasks[0].name, "A task");
+        assert_eq!(foreign_read, None);
     }
 
     #[sqlx::test]

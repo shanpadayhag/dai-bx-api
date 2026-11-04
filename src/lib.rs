@@ -14,8 +14,8 @@ use crate::core::middlewares::client_ip::attach_client_ip;
 use crate::core::middlewares::csrf_protection::require_same_origin_json;
 use crate::core::state::AppState;
 use crate::features::{
-    account, auth, board_lists, board_properties, boards, cards, categories, health, task_groups,
-    tasks,
+    account, auth, board_lists, board_properties, boards, calendar_events, cards, categories,
+    health, task_groups, tasks, tracking,
 };
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -38,6 +38,7 @@ pub fn app(app_state: AppState) -> Router {
         .nest("/account", account::router::router())
         .nest("/auth", auth::router::router())
         .nest("/boards", boards::router::router())
+        .nest("/calendar", calendar_events::router::router())
         .nest("/categories", categories::router::router())
         .nest("/health", health::router::router())
         .nest("/task-groups", task_groups::router::router())
@@ -45,6 +46,7 @@ pub fn app(app_state: AppState) -> Router {
         .merge(board_properties::router::router())
         .merge(cards::router::router())
         .merge(tasks::router::router())
+        .merge(tracking::router::router())
         .layer(middleware_stack)
         .with_state(app_state)
 }

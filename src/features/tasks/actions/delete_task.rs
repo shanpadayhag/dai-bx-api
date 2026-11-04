@@ -1,6 +1,8 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::features::calendar_events::actions::close_running_events::CloseRunningEvents;
+use crate::features::calendar_events::entities::calendar_event::ClosingScope;
 use crate::features::tasks::actions::lock_group_of_task::LockGroupOfTask;
 use crate::features::tasks::data_sources::postgres::task_source::PostgresTaskSource;
 use crate::features::tasks::entities::task::GroupTasks;
@@ -9,6 +11,7 @@ use crate::features::tasks::error::TaskError;
 pub struct DeleteTask<'a> {
     db_pool: &'a PgPool,
     lock_group_of_task: LockGroupOfTask,
+    close_running_events: CloseRunningEvents,
     postgres_task_source: PostgresTaskSource,
 }
 
@@ -17,6 +20,7 @@ impl<'a> DeleteTask<'a> {
         Self {
             db_pool,
             lock_group_of_task: LockGroupOfTask::new(),
+            close_running_events: CloseRunningEvents::new(),
             postgres_task_source: PostgresTaskSource,
         }
     }
@@ -26,6 +30,13 @@ impl<'a> DeleteTask<'a> {
         let task_group_details = self
             .lock_group_of_task
             .execute(&mut delete_transaction, user_id, task_id)
+            .await?;
+        self.close_running_events
+            .execute(
+                &mut delete_transaction,
+                user_id,
+                ClosingScope::Task(task_id),
+            )
             .await?;
         let task_place = self
             .postgres_task_source

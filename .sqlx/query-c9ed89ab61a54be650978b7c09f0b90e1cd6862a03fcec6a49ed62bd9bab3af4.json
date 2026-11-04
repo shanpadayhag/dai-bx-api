@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT tasks.id,\n                      tasks.parent_id,\n                      tasks.position,\n                      tasks.name,\n                      tasks.completed_at IS NOT NULL AS \"is_done!\",\n                      tasks.estimate_minutes,\n                      cards.id AS \"card_id?\",\n                      cards.title AS \"card_title?\",\n                      cards.board_id AS \"card_board_id?\"\n               FROM tasks\n               LEFT JOIN cards ON cards.id = tasks.card_id\n               WHERE tasks.group_id = $1\n               ORDER BY tasks.parent_id NULLS FIRST, tasks.position, tasks.id",
+  "query": "SELECT tasks.id,\n                      tasks.parent_id,\n                      tasks.position,\n                      tasks.name,\n                      tasks.completed_at IS NOT NULL AS \"is_done!\",\n                      tasks.estimate_minutes,\n                      cards.id AS \"card_id?\",\n                      cards.title AS \"card_title?\",\n                      cards.board_id AS \"card_board_id?\",\n                      (SELECT count(*)\n                       FROM calendar_events\n                       WHERE calendar_events.task_id = tasks.id) AS \"tracked_event_count!\"\n               FROM tasks\n               LEFT JOIN cards ON cards.id = tasks.card_id\n               WHERE tasks.group_id = $1\n               ORDER BY tasks.parent_id NULLS FIRST, tasks.position, tasks.id",
   "describe": {
     "columns": [
       {
@@ -96,6 +96,12 @@
             "name": "board_id"
           }
         }
+      },
+      {
+        "ordinal": 9,
+        "name": "tracked_event_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -112,8 +118,9 @@
       true,
       false,
       false,
-      false
+      false,
+      null
     ]
   },
-  "hash": "e392255863cf8ee57453100388e8caa8d878302d42bba2ec422395f4b427aed0"
+  "hash": "c9ed89ab61a54be650978b7c09f0b90e1cd6862a03fcec6a49ed62bd9bab3af4"
 }

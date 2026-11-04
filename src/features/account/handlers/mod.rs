@@ -1,6 +1,8 @@
 pub mod get_account;
 pub mod get_account_sessions;
+pub mod get_account_time_tracking;
 pub mod patch_account;
+pub mod patch_account_time_tracking;
 pub mod post_account_authenticator;
 pub mod post_account_authenticator_confirm;
 pub mod post_account_delete;

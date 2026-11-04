@@ -3,10 +3,10 @@ use axum::routing::{get, post};
 
 use crate::core::state::AppState;
 use crate::features::account::handlers::{
-    get_account, get_account_sessions, patch_account, post_account_authenticator,
-    post_account_authenticator_confirm, post_account_delete, post_account_email,
-    post_account_email_confirm, post_account_password, post_account_recovery_codes,
-    post_account_sessions_end, post_account_sessions_end_all,
+    get_account, get_account_sessions, get_account_time_tracking, patch_account,
+    patch_account_time_tracking, post_account_authenticator, post_account_authenticator_confirm,
+    post_account_delete, post_account_email, post_account_email_confirm, post_account_password,
+    post_account_recovery_codes, post_account_sessions_end, post_account_sessions_end_all,
 };
 
 pub fn router() -> Router<AppState> {
@@ -44,6 +44,11 @@ pub fn router() -> Router<AppState> {
         .route(
             "/sessions/end-all",
             post(post_account_sessions_end_all::post_account_sessions_end_all),
+        )
+        .route(
+            "/time-tracking",
+            get(get_account_time_tracking::get_account_time_tracking)
+                .patch(patch_account_time_tracking::patch_account_time_tracking),
         )
         .route("/delete", post(post_account_delete::post_account_delete))
 }

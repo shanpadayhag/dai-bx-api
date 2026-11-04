@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_events\n             SET last_answered_at = now(), updated_at = now()\n             WHERE id = $2 AND user_id = $1 AND ends_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4e00ce252786176730e2ebb47a9257098bbbd3a07fc3d6eeace9321a90fb130b"
+}
