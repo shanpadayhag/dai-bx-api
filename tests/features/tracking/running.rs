@@ -58,6 +58,13 @@ async fn lists_several_running_items_newest_first(db_pool: PgPool) {
         vec!["Review", "Plan the release", "Write the changelog"]
     );
     assert_eq!(running_items[1]["estimateMinutes"], serde_json::Value::Null);
+    let source_names: Vec<&str> = running_items
+        .as_array()
+        .expect("a list")
+        .iter()
+        .map(|running_item| running_item["sourceName"].as_str().expect("a source name"))
+        .collect();
+    assert_eq!(source_names, vec!["Today", "Personal", "Today"]);
 }
 
 #[sqlx::test]

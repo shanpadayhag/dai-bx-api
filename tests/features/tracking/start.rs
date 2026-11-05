@@ -96,6 +96,7 @@ async fn starting_a_task_opens_a_running_item_with_its_name_and_estimate(db_pool
         json!({ "kind": "task", "id": task_id, "groupId": task_group_id })
     );
     assert_eq!(running_item["estimateMinutes"], 45);
+    assert_eq!(running_item["sourceName"], "Today");
 }
 
 #[sqlx::test]
@@ -149,6 +150,7 @@ async fn starting_a_card_opens_a_running_item_without_an_estimate(db_pool: PgPoo
         json!({ "kind": "card", "id": release_card_id, "boardId": board_id(&board) })
     );
     assert_eq!(running_item["estimateMinutes"], serde_json::Value::Null);
+    assert_eq!(running_item["sourceName"], "Personal");
 }
 
 #[sqlx::test]

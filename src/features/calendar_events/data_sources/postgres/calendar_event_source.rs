@@ -69,6 +69,7 @@ struct RunningItemRow {
     task_estimate_minutes: Option<i32>,
     card_id: Option<Uuid>,
     card_board_id: Option<Uuid>,
+    source_name: Option<String>,
     starts_at_millis: i64,
     last_answered_at_millis: Option<i64>,
 }
@@ -77,6 +78,7 @@ impl From<RunningItemRow> for RunningItem {
     fn from(item_row: RunningItemRow) -> Self {
         Self {
             estimate_minutes: item_row.task_estimate_minutes,
+            source_name: item_row.source_name,
             event: CalendarEvent::from(CalendarEventRow {
                 id: item_row.id,
                 is_tracked: true,
@@ -304,11 +306,14 @@ impl PostgresCalendarEventSource {
                       tasks.estimate_minutes AS "task_estimate_minutes?",
                       calendar_events.card_id,
                       cards.board_id AS "card_board_id?",
+                      coalesce(task_groups.name, boards.name) AS source_name,
                       (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS "starts_at_millis!",
                       (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis
                FROM calendar_events
                LEFT JOIN tasks ON tasks.id = calendar_events.task_id
+               LEFT JOIN task_groups ON task_groups.id = tasks.group_id
                LEFT JOIN cards ON cards.id = calendar_events.card_id
+               LEFT JOIN boards ON boards.id = cards.board_id
                WHERE calendar_events.user_id = $1 AND calendar_events.ends_at IS NULL
                ORDER BY calendar_events.starts_at DESC, calendar_events.id DESC"#,
             user_id,
@@ -334,11 +339,14 @@ impl PostgresCalendarEventSource {
                       tasks.estimate_minutes AS "task_estimate_minutes?",
                       calendar_events.card_id,
                       cards.board_id AS "card_board_id?",
+                      coalesce(task_groups.name, boards.name) AS source_name,
                       (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS "starts_at_millis!",
                       (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis
                FROM calendar_events
                LEFT JOIN tasks ON tasks.id = calendar_events.task_id
+               LEFT JOIN task_groups ON task_groups.id = tasks.group_id
                LEFT JOIN cards ON cards.id = calendar_events.card_id
+               LEFT JOIN boards ON boards.id = cards.board_id
                WHERE calendar_events.id = $2
                  AND calendar_events.user_id = $1
                  AND calendar_events.ends_at IS NULL"#,

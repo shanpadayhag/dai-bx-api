@@ -9,6 +9,7 @@ pub struct RunningItemResponse {
     #[serde(flatten)]
     pub event: CalendarEventResponse,
     pub estimate_minutes: Option<i32>,
+    pub source_name: Option<String>,
 }
 
 impl From<RunningItem> for RunningItemResponse {
@@ -16,6 +17,7 @@ impl From<RunningItem> for RunningItemResponse {
         Self {
             event: running_item.event.into(),
             estimate_minutes: running_item.estimate_minutes,
+            source_name: running_item.source_name,
         }
     }
 }

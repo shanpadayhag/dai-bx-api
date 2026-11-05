@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT calendar_events.id AS \"id!\",\n                      calendar_events.title AS \"title!\",\n                      calendar_events.category_id,\n                      calendar_events.task_id,\n                      tasks.group_id AS \"task_group_id?\",\n                      tasks.estimate_minutes AS \"task_estimate_minutes?\",\n                      calendar_events.card_id,\n                      cards.board_id AS \"card_board_id?\",\n                      (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS \"starts_at_millis!\",\n                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis\n               FROM calendar_events\n               LEFT JOIN tasks ON tasks.id = calendar_events.task_id\n               LEFT JOIN cards ON cards.id = calendar_events.card_id\n               WHERE calendar_events.id = $2\n                 AND calendar_events.user_id = $1\n                 AND calendar_events.ends_at IS NULL",
+  "query": "SELECT calendar_events.id AS \"id!\",\n                      calendar_events.title AS \"title!\",\n                      calendar_events.category_id,\n                      calendar_events.task_id,\n                      tasks.group_id AS \"task_group_id?\",\n                      tasks.estimate_minutes AS \"task_estimate_minutes?\",\n                      calendar_events.card_id,\n                      cards.board_id AS \"card_board_id?\",\n                      coalesce(task_groups.name, boards.name) AS source_name,\n                      (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS \"starts_at_millis!\",\n                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis\n               FROM calendar_events\n               LEFT JOIN tasks ON tasks.id = calendar_events.task_id\n               LEFT JOIN task_groups ON task_groups.id = tasks.group_id\n               LEFT JOIN cards ON cards.id = calendar_events.card_id\n               LEFT JOIN boards ON boards.id = cards.board_id\n               WHERE calendar_events.user_id = $1 AND calendar_events.ends_at IS NULL\n               ORDER BY calendar_events.starts_at DESC, calendar_events.id DESC",
   "describe": {
     "columns": [
       {
@@ -93,12 +93,18 @@
       },
       {
         "ordinal": 8,
+        "name": "source_name",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
         "name": "starts_at_millis!",
         "type_info": "Int8",
         "origin": "Expression"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "last_answered_at_millis",
         "type_info": "Int8",
         "origin": "Expression"
@@ -106,22 +112,22 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Uuid"
       ]
     },
     "nullable": [
-      true,
-      true,
+      false,
+      false,
       true,
       true,
       false,
       true,
       true,
-      true,
+      false,
+      null,
       null,
       null
     ]
   },
-  "hash": "1781ff8b67cd65ef9f68456ff04e348561aaa80367ad07b13bdf7e029cb520d8"
+  "hash": "5c4d31ec9b0b0603db58abfe98a52a1f41098968fcaab7ad5476b638ee1c9e9a"
 }

@@ -127,6 +127,7 @@ pub enum RunningOpen {
 pub struct RunningItem {
     pub event: CalendarEvent,
     pub estimate_minutes: Option<i32>,
+    pub source_name: Option<String>,
 }
 
 impl CalendarEvent {
