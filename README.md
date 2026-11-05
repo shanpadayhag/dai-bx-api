@@ -157,6 +157,8 @@ curl http://localhost:9000/health
 | POST | `/account/recovery-codes` | `{"password","code"}` → `200 {"recoveryCodes":[…10]}`; every earlier code stops working |
 | POST | `/account/authenticator` | `{"password","code"}` (a recovery code works) → `200 {"next":"set_up_authenticator"}` and a challenge cookie for `GET /auth/mfa/setup` |
 | POST | `/account/authenticator/confirm` | `{"code"}` from the new app → `200 {"status":"authenticator_replaced"}`; ends the other sessions and every remembered device |
+| GET | `/account/time-tracking` | with a session → `200 {"checkInsEnabled","checkInIntervalMinutes","firstCheckInMinutes","workingHoursStart","workingHoursEnd","trackedCategoryId"}` |
+| PATCH | `/account/time-tracking` | any of those fields → `200` with the saved settings; `422` for check-ins outside 5–240 minutes or a time not like `09:30`; `404` for an unknown category |
 | POST | `/account/delete` | `{"password","code","confirmation":"delete my account"}` → `200 {"status":"account_deleted"}`; deletes everything the account owns |
 | POST | `/account/email/confirm` | `{"token"}`, no session needed → `200 {"status":"email_changed"}`; `422` for a used or expired link |
 
@@ -220,7 +222,7 @@ cargo sqlx prepare -- --all-targets
 - [x] Authentication: invites, sign-up, email verification, authenticator-app MFA, sessions, account settings and deletion
 - [x] Tasks: groups, nested tasks, moves and group import, plus the categories the calendar uses
 - [x] Board, with user-defined card properties, Markdown notes and task-to-card links
-- [ ] Calendar and time tracking
+- [x] Calendar and time tracking: planned and tracked events, start and finish, check-ins and working hours
 - [ ] Workflows: board rules and card schedules
 - [ ] Automatic scheduling
 
