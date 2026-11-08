@@ -1,7 +1,9 @@
+pub mod change_series_occurrence;
 pub mod check_in_running_event;
 pub mod close_running_events;
 pub mod create_planned_event;
 pub mod delete_calendar_event;
+pub mod delete_series_occurrence;
 pub mod find_event_task_id;
 pub mod finish_running_event;
 pub mod list_calendar_events;

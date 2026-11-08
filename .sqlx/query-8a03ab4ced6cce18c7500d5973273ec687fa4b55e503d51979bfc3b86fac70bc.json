@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE event_series\n             SET until_instant = least(\n                     coalesce(until_instant, 'infinity'::timestamptz),\n                     'epoch'::timestamptz + $2::bigint * interval '1 millisecond'\n                 ),\n                 schedule_id = NULL,\n                 hidden = false,\n                 updated_at = now()\n             WHERE schedule_id = ANY($1::uuid[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8a03ab4ced6cce18c7500d5973273ec687fa4b55e503d51979bfc3b86fac70bc"
+}

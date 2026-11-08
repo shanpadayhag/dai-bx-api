@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT ON (card_schedules.card_id)\n                      card_schedules.card_id,\n                      (extract(epoch FROM card_schedules.next_run_at) * 1000)::bigint AS \"next_run_at_millis!\",\n                      board_lists.name AS list_name\n               FROM card_schedules\n               JOIN board_lists ON board_lists.id = card_schedules.target_list_id\n               WHERE card_schedules.board_id = $1\n                 AND NOT card_schedules.paused\n                 AND card_schedules.next_run_at IS NOT NULL\n               ORDER BY card_schedules.card_id, card_schedules.next_run_at, card_schedules.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "card_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "card_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "next_run_at_millis!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "list_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "board_lists",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "6d549f23354a3ba0a438185eb76b1556ab2e78b63ba0221b2dfbf3cb3314271a"
+}

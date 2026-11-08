@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::core::error::AppError;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::actions::delete_board::DeleteBoard;
 use crate::features::boards::responses::deleted_response::DeletedResponse;
 use crate::features::throttling::entities::write_session::WriteSession;
@@ -15,7 +16,7 @@ pub async fn delete_board(
 ) -> Result<Json<DeletedResponse>, AppError> {
     let board_id = Uuid::parse_str(&board_id_text).map_err(|_| AppError::NotFound)?;
     DeleteBoard::new(&app_state.db_pool)
-        .execute(write_session.user_id, board_id)
+        .execute(write_session.user_id, board_id, UtcInstant::now())
         .await?;
     Ok(Json(DeletedResponse::deleted()))
 }

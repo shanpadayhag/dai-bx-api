@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_events\n             SET series_id = $2, updated_at = now()\n             WHERE series_id = $1\n               AND original_start = ANY(\n                   SELECT 'epoch'::timestamptz + start_millis * interval '1 millisecond'\n                   FROM unnest($3::bigint[]) AS start_millis)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d4f423b780e5f2ac1c2e94ba8d5fdacd13743f95c4c8278250b35f7ba68bbee0"
+}

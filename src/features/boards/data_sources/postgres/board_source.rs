@@ -162,6 +162,7 @@ impl PostgresBoardSource {
                 values: Vec::new(),
                 linked_task_count: card_row.linked_task_count,
                 done_linked_task_count: card_row.done_linked_task_count,
+                next_move: None,
             })
             .collect())
     }

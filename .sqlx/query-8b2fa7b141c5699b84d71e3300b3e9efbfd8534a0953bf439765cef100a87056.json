@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT how, moved FROM schedule_runs WHERE schedule_id = $1 ORDER BY ran_at, id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "how",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "schedule_runs",
+            "name": "how"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "moved",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "schedule_runs",
+            "name": "moved"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "8b2fa7b141c5699b84d71e3300b3e9efbfd8534a0953bf439765cef100a87056"
+}

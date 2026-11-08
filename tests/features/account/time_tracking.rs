@@ -49,6 +49,7 @@ async fn a_new_account_has_the_default_settings(db_pool: PgPool) {
             "workingHoursStart": "16:00",
             "workingHoursEnd": "02:00",
             "trackedCategoryId": null,
+            "calendarTimeZone": null,
         })
     );
 }
@@ -65,6 +66,7 @@ async fn each_field_updates_on_its_own(db_pool: PgPool) {
         ("workingHoursStart", json!("08:30")),
         ("workingHoursEnd", json!("23:59")),
         ("trackedCategoryId", json!(studies_category_id)),
+        ("calendarTimeZone", json!("Europe/London")),
     ] {
         let response = patch_time_tracking(
             &db_pool,
@@ -85,18 +87,24 @@ async fn each_field_updates_on_its_own(db_pool: PgPool) {
             "workingHoursStart": "08:30",
             "workingHoursEnd": "23:59",
             "trackedCategoryId": studies_category_id,
+            "calendarTimeZone": "Europe/London",
         })
     );
 
     let cleared_response = patch_time_tracking(
         &db_pool,
         &signed_in_person,
-        json!({ "trackedCategoryId": null }),
+        json!({ "trackedCategoryId": null, "calendarTimeZone": null }),
     )
     .await;
     assert_eq!(cleared_response.status(), StatusCode::OK);
+    let cleared_settings = response_json(cleared_response).await;
     assert_eq!(
-        response_json(cleared_response).await["trackedCategoryId"],
+        cleared_settings["trackedCategoryId"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        cleared_settings["calendarTimeZone"],
         serde_json::Value::Null
     );
 }
@@ -114,6 +122,9 @@ async fn refuses_an_interval_outside_5_to_240_or_a_bad_time(db_pool: PgPool) {
         json!({ "workingHoursStart": "9:30" }),
         json!({ "workingHoursEnd": "02:60" }),
         json!({ "workingHoursEnd": "02:00:00" }),
+        json!({ "calendarTimeZone": "Mars/Olympus" }),
+        json!({ "calendarTimeZone": "+08:00" }),
+        json!({ "calendarTimeZone": "" }),
     ] {
         let response =
             patch_time_tracking(&db_pool, &signed_in_person, refused_change.clone()).await;

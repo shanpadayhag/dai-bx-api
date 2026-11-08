@@ -1,0 +1,110 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT event_series.id,\n                      event_series.title,\n                      event_series.category_id,\n                      event_series.time_zone,\n                      to_char(event_series.local_start, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS \"local_start_text!\",\n                      event_series.duration_minutes,\n                      event_series.repeat_rule AS \"repeat_rule: Json<RepeatRule>\",\n                      (extract(epoch FROM event_series.until_instant) * 1000)::bigint AS until_instant_millis,\n                      coalesce(\n                          (SELECT array_agg((extract(epoch FROM event_exceptions.original_start) * 1000)::bigint\n                                            ORDER BY event_exceptions.original_start)\n                           FROM event_exceptions\n                           WHERE event_exceptions.series_id = event_series.id),\n                          '{}'\n                      ) AS \"cancelled_start_millis!\"\n               FROM event_series\n               WHERE event_series.id = $2\n                 AND event_series.user_id = $1\n                 AND NOT event_series.hidden\n               FOR UPDATE OF event_series",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "category_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "category_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "time_zone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "time_zone"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "local_start_text!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "duration_minutes",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "duration_minutes"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "repeat_rule: Json<RepeatRule>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "repeat_rule"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "until_instant_millis",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "cancelled_start_millis!",
+        "type_info": "Int8Array",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      null,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "e234d4f5b644b1780b47ad5a378bfd13488c21c5af00f139d155dd026d205239"
+}

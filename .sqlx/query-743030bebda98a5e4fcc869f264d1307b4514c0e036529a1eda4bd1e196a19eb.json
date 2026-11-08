@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE card_schedules\n             SET paused = $2,\n                 next_run_at = 'epoch'::timestamptz + $3::bigint * interval '1 millisecond',\n                 updated_at = now()\n             WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "743030bebda98a5e4fcc869f264d1307b4514c0e036529a1eda4bd1e196a19eb"
+}

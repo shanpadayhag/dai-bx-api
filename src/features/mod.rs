@@ -5,6 +5,7 @@ pub mod board_lists;
 pub mod board_properties;
 pub mod boards;
 pub mod calendar_events;
+pub mod card_schedules;
 pub mod cards;
 pub mod categories;
 pub mod email;

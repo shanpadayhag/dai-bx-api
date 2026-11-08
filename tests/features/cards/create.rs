@@ -117,6 +117,7 @@ async fn adds_each_card_last_in_its_list_with_a_trimmed_title(db_pool: PgPool) {
             "values": [],
             "linkedTaskCount": 0,
             "doneLinkedTaskCount": 0,
+            "nextMove": null,
         })
     );
 }

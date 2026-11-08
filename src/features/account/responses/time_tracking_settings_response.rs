@@ -11,6 +11,7 @@ pub struct TimeTrackingSettingsResponse {
     pub working_hours_start: String,
     pub working_hours_end: String,
     pub tracked_category_id: Option<String>,
+    pub calendar_time_zone: Option<String>,
 }
 
 impl From<TimeTrackingSettings> for TimeTrackingSettingsResponse {
@@ -24,6 +25,7 @@ impl From<TimeTrackingSettings> for TimeTrackingSettingsResponse {
             tracked_category_id: time_tracking_settings
                 .tracked_category_id
                 .map(|tracked_category_id| tracked_category_id.to_string()),
+            calendar_time_zone: time_tracking_settings.calendar_time_zone,
         }
     }
 }

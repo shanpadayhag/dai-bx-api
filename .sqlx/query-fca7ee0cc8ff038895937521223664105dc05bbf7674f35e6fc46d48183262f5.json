@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT card_schedules.id\n             FROM card_schedules\n             JOIN cards ON cards.id = card_schedules.card_id\n             WHERE card_schedules.user_id = $1\n               AND ($2::uuid IS NULL OR cards.id = $2)\n               AND ($3::uuid IS NULL OR cards.list_id = $3)\n               AND ($4::uuid IS NULL OR cards.board_id = $4)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fca7ee0cc8ff038895937521223664105dc05bbf7674f35e6fc46d48183262f5"
+}

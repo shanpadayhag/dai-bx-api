@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE event_series\n             SET title = $3,\n                 category_id = $4,\n                 time_zone = $5,\n                 local_start = $6::text::timestamp,\n                 duration_minutes = $7,\n                 repeat_rule = $8,\n                 until_instant = 'epoch'::timestamptz + $9::bigint * interval '1 millisecond',\n                 updated_at = now()\n             WHERE id = $2 AND user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4",
+        "Jsonb",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "67b7f036a7bb71b7139eb9315e46cd1d827aa9aae4c8f1d5d9b4c5f8380619b2"
+}

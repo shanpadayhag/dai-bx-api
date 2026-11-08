@@ -46,6 +46,14 @@ pub struct BoardCardResponse {
     pub values: Vec<CardValueResponse>,
     pub linked_task_count: i64,
     pub done_linked_task_count: i64,
+    pub next_move: Option<NextMoveResponse>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NextMoveResponse {
+    pub at: String,
+    pub list_name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -125,6 +133,10 @@ impl From<BoardCard> for BoardCardResponse {
                 .collect(),
             linked_task_count: board_card.linked_task_count,
             done_linked_task_count: board_card.done_linked_task_count,
+            next_move: board_card.next_move.map(|next_move| NextMoveResponse {
+                at: next_move.at.to_iso_text(),
+                list_name: next_move.list_name,
+            }),
         }
     }
 }

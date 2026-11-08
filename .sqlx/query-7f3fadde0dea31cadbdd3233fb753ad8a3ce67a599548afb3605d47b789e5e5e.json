@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT check_ins_enabled,\n                      check_in_interval_minutes,\n                      first_check_in_minutes,\n                      to_char(working_hours_start, 'HH24:MI') AS \"working_hours_start!\",\n                      to_char(working_hours_end, 'HH24:MI') AS \"working_hours_end!\",\n                      tracked_category_id\n               FROM users\n               WHERE id = $1",
+  "query": "SELECT check_ins_enabled,\n                      check_in_interval_minutes,\n                      first_check_in_minutes,\n                      to_char(working_hours_start, 'HH24:MI') AS \"working_hours_start!\",\n                      to_char(working_hours_end, 'HH24:MI') AS \"working_hours_end!\",\n                      tracked_category_id,\n                      calendar_time_zone\n               FROM users\n               WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -58,6 +58,17 @@
             "name": "tracked_category_id"
           }
         }
+      },
+      {
+        "ordinal": 6,
+        "name": "calendar_time_zone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "calendar_time_zone"
+          }
+        }
       }
     ],
     "parameters": {
@@ -71,8 +82,9 @@
       false,
       null,
       null,
+      true,
       true
     ]
   },
-  "hash": "777cedc0e7acfe688349bc76faa820077935a9b33fe94d3b3212a1a70ef0c3b6"
+  "hash": "7f3fadde0dea31cadbdd3233fb753ad8a3ce67a599548afb3605d47b789e5e5e"
 }

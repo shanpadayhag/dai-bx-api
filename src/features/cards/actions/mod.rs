@@ -5,5 +5,6 @@ pub mod find_card_detail;
 pub mod find_card_title;
 pub mod lock_board_of_card;
 pub mod move_card;
+pub mod move_card_to_list_top;
 pub mod set_card_value;
 pub mod update_card;

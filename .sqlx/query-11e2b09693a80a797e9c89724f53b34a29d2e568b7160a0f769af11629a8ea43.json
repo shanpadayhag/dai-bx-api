@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT calendar_events.id,\n                      calendar_events.kind = 'tracked' AS \"is_tracked!\",\n                      calendar_events.title,\n                      calendar_events.category_id,\n                      calendar_events.task_id,\n                      tasks.group_id AS \"task_group_id?\",\n                      calendar_events.card_id,\n                      cards.board_id AS \"card_board_id?\",\n                      (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS \"starts_at_millis!\",\n                      (extract(epoch FROM calendar_events.ends_at) * 1000)::bigint AS ends_at_millis,\n                      (extract(epoch FROM calendar_events.finished_at) * 1000)::bigint AS finished_at_millis,\n                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis\n               FROM calendar_events\n               LEFT JOIN tasks ON tasks.id = calendar_events.task_id\n               LEFT JOIN cards ON cards.id = calendar_events.card_id\n               WHERE calendar_events.id = $2 AND calendar_events.user_id = $1\n               FOR UPDATE OF calendar_events",
+  "query": "SELECT calendar_events.id,\n                      calendar_events.kind = 'tracked' AS \"is_tracked!\",\n                      calendar_events.title,\n                      calendar_events.category_id,\n                      calendar_events.task_id,\n                      tasks.group_id AS \"task_group_id?\",\n                      calendar_events.card_id,\n                      cards.board_id AS \"card_board_id?\",\n                      (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS \"starts_at_millis!\",\n                      (extract(epoch FROM calendar_events.ends_at) * 1000)::bigint AS ends_at_millis,\n                      (extract(epoch FROM calendar_events.finished_at) * 1000)::bigint AS finished_at_millis,\n                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis,\n                      calendar_events.time_zone,\n                      calendar_events.series_id,\n                      (extract(epoch FROM calendar_events.original_start) * 1000)::bigint AS original_start_millis,\n                      event_series.repeat_rule AS \"series_repeat_rule?: Json<RepeatRule>\"\n               FROM calendar_events\n               LEFT JOIN tasks ON tasks.id = calendar_events.task_id\n               LEFT JOIN cards ON cards.id = calendar_events.card_id\n               LEFT JOIN event_series ON event_series.id = calendar_events.series_id\n               WHERE calendar_events.id = $2 AND calendar_events.user_id = $1\n               FOR UPDATE OF calendar_events",
   "describe": {
     "columns": [
       {
@@ -109,6 +109,45 @@
         "name": "last_answered_at_millis",
         "type_info": "Int8",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 12,
+        "name": "time_zone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "calendar_events",
+            "name": "time_zone"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "series_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "calendar_events",
+            "name": "series_id"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "original_start_millis",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 15,
+        "name": "series_repeat_rule?: Json<RepeatRule>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "repeat_rule"
+          }
+        }
       }
     ],
     "parameters": {
@@ -129,8 +168,12 @@
       null,
       null,
       null,
-      null
+      null,
+      true,
+      true,
+      null,
+      false
     ]
   },
-  "hash": "4de502ac009692cabb1c5bd61782b1c31a88fc2c004268bbbde100a3533b250b"
+  "hash": "11e2b09693a80a797e9c89724f53b34a29d2e568b7160a0f769af11629a8ea43"
 }

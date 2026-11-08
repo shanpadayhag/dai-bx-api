@@ -9,7 +9,7 @@ use crate::support::{
     sign_up_with_authenticator,
 };
 
-async fn patch_event(
+pub async fn patch_event(
     db_pool: &PgPool,
     signed_in_person: &SignedInPerson,
     event_id: &str,
@@ -32,8 +32,8 @@ async fn changes_a_planned_event_s_title_category_and_times(db_pool: PgPool) {
         &db_pool,
         &signed_in_person,
         "Gym",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
 
@@ -44,8 +44,10 @@ async fn changes_a_planned_event_s_title_category_and_times(db_pool: PgPool) {
         json!({
             "title": "Swim",
             "categoryId": studies_category_id,
-            "startsAt": "2026-11-06T18:00:00Z",
-            "endsAt": "2026-11-07T19:00:00Z",
+            "start": "2026-11-07T02:00",
+            "end": "2026-11-08T03:00",
+            "inputZone": "Asia/Manila",
+            "timeZone": "Asia/Manila",
         }),
     )
     .await;
@@ -56,6 +58,7 @@ async fn changes_a_planned_event_s_title_category_and_times(db_pool: PgPool) {
     assert_eq!(updated_event["categoryId"], studies_category_id.as_str());
     assert_eq!(updated_event["startsAt"], "2026-11-06T18:00:00.000Z");
     assert_eq!(updated_event["endsAt"], "2026-11-07T19:00:00.000Z");
+    assert_eq!(updated_event["timeZone"], "Asia/Manila");
 }
 
 #[sqlx::test]
@@ -66,8 +69,8 @@ async fn leaves_missing_fields_alone_and_clears_a_null_category(db_pool: PgPool)
         &db_pool,
         &signed_in_person,
         "Gym",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
     patch_event(
@@ -82,7 +85,7 @@ async fn leaves_missing_fields_alone_and_clears_a_null_category(db_pool: PgPool)
         &db_pool,
         &signed_in_person,
         event_id(&gym_event),
-        json!({ "categoryId": null, "endsAt": "2026-11-05T11:00:00Z" }),
+        json!({ "categoryId": null, "end": "2026-11-05T11:00", "inputZone": "UTC" }),
     )
     .await;
 
@@ -100,8 +103,8 @@ async fn refuses_changes_that_break_the_planned_rules(db_pool: PgPool) {
         &db_pool,
         &signed_in_person,
         "Gym",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
 
@@ -111,16 +114,28 @@ async fn refuses_changes_that_break_the_planned_rules(db_pool: PgPool) {
             "a title over 200 characters",
             json!({ "title": "a".repeat(201) }),
         ),
-        ("a bad timestamp", json!({ "startsAt": "05/11/2026 09:00" })),
+        (
+            "a bad time",
+            json!({ "start": "05/11/2026 09:00", "inputZone": "UTC" }),
+        ),
         (
             "an end moved under 15 minutes",
-            json!({ "endsAt": "2026-11-05T09:10:00Z" }),
+            json!({ "end": "2026-11-05T09:10", "inputZone": "UTC" }),
         ),
         (
             "a start moved past the end",
-            json!({ "startsAt": "2026-11-05T11:00:00Z" }),
+            json!({ "start": "2026-11-05T11:00", "inputZone": "UTC" }),
         ),
-        ("a null end", json!({ "endsAt": null })),
+        ("a null end", json!({ "end": null, "inputZone": "UTC" })),
+        (
+            "a new time without its zone",
+            json!({ "start": "2026-11-05T09:30" }),
+        ),
+        (
+            "an unknown input zone",
+            json!({ "start": "2026-11-05T09:30", "inputZone": "Mars/Olympus" }),
+        ),
+        ("an unknown event zone", json!({ "timeZone": "GMT+8 " })),
     ] {
         let response = patch_event(
             &db_pool,
@@ -145,16 +160,16 @@ async fn answers_not_found_for_someone_else_s_event_or_category(db_pool: PgPool)
         &db_pool,
         &other_person,
         "Theirs",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
     let my_event = create_planned_event(
         &db_pool,
         &signed_in_person,
         "Mine",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
     let their_category_id = find_category_id(&db_pool, &other_person, "Studies").await;
@@ -193,8 +208,8 @@ async fn changing_an_event_needs_a_session(db_pool: PgPool) {
         &db_pool,
         &signed_in_person,
         "Gym",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
 

@@ -6,10 +6,10 @@ use sqlx::PgPool;
 use crate::board_lists::create::list_id;
 use crate::boards::create::board_id;
 use crate::calendar_events::create::event_id;
+use crate::calendar_events::list::list_events;
 use crate::cards::create::{board_with_cards, card_id};
 use crate::support::{
-    SignedInPerson, build_test_app, delete_with_cookies, get_with_cookies, response_json,
-    sign_up_with_authenticator,
+    SignedInPerson, build_test_app, delete_with_cookies, sign_up_with_authenticator,
 };
 use crate::tasks::completion::set_task_done;
 use crate::tasks::create::{add_task, task_id_named};
@@ -22,23 +22,16 @@ pub async fn find_calendar_event(
     signed_in_person: &SignedInPerson,
     wanted_event_id: &str,
 ) -> serde_json::Value {
-    let from = UtcInstant::now().plus_days(-1).to_iso_text();
-    let to = UtcInstant::now().plus_days(1).to_iso_text();
-    let response = get_with_cookies(
-        build_test_app(db_pool.clone()),
-        &format!("/calendar/events?from={from}&to={to}"),
-        &signed_in_person.session_cookies,
+    let yesterday_text = UtcInstant::now().plus_days(-1).to_iso_text();
+    list_events(
+        db_pool,
+        signed_in_person,
+        &format!("start={}&days=7&timeZone=UTC", &yesterday_text[..10]),
     )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    response_json(response)
-        .await
-        .as_array()
-        .expect("a list of events")
-        .iter()
-        .find(|calendar_event| calendar_event["id"] == wanted_event_id)
-        .expect("the event should still be on the calendar")
-        .clone()
+    .await
+    .into_iter()
+    .find(|calendar_event| calendar_event["id"] == wanted_event_id)
+    .expect("the event should still be on the calendar")
 }
 
 async fn delete_path(db_pool: &PgPool, signed_in_person: &SignedInPerson, request_path: &str) {

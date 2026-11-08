@@ -1,11 +1,13 @@
 use sqlx::PgExecutor;
+use sqlx::types::Json;
 use uuid::Uuid;
 
+use crate::core::recurrence::RepeatRule;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::entities::calendar_event::{
     CalendarEvent, CalendarEventKind, CalendarEventSource, ChangedCalendarEvent, ClosingScope,
     EventRange, EventWrite, NewCalendarEvent, NewRunningEvent, RunningItem, RunningOpen,
-    TrackedSubject,
+    SeriesOccurrence, TrackedSubject,
 };
 
 #[derive(Default)]
@@ -24,6 +26,10 @@ struct CalendarEventRow {
     ends_at_millis: Option<i64>,
     finished_at_millis: Option<i64>,
     last_answered_at_millis: Option<i64>,
+    time_zone: Option<String>,
+    series_id: Option<Uuid>,
+    original_start_millis: Option<i64>,
+    series_repeat_rule: Option<Json<RepeatRule>>,
 }
 
 impl From<CalendarEventRow> for CalendarEvent {
@@ -56,6 +62,21 @@ impl From<CalendarEventRow> for CalendarEvent {
             last_answered_at: event_row
                 .last_answered_at_millis
                 .map(UtcInstant::from_unix_millis),
+            time_zone: event_row.time_zone,
+            series: match (
+                event_row.series_id,
+                event_row.original_start_millis,
+                event_row.series_repeat_rule,
+            ) {
+                (Some(series_id), Some(original_start_millis), Some(Json(repeat_rule))) => {
+                    Some(SeriesOccurrence {
+                        series_id,
+                        original_start: UtcInstant::from_unix_millis(original_start_millis),
+                        repeat_rule,
+                    })
+                }
+                _ => None,
+            },
         }
     }
 }
@@ -92,6 +113,10 @@ impl From<RunningItemRow> for RunningItem {
                 ends_at_millis: None,
                 finished_at_millis: None,
                 last_answered_at_millis: item_row.last_answered_at_millis,
+                time_zone: None,
+                series_id: None,
+                original_start_millis: None,
+                series_repeat_rule: None,
             }),
         }
     }
@@ -99,6 +124,13 @@ impl From<RunningItemRow> for RunningItem {
 
 fn millis_of(instant: Option<UtcInstant>) -> Option<i64> {
     instant.map(UtcInstant::unix_millis)
+}
+
+fn starts_millis_of(original_starts: &[UtcInstant]) -> Vec<i64> {
+    original_starts
+        .iter()
+        .map(|original_start| original_start.unix_millis())
+        .collect()
 }
 
 fn write_outcome(write_result: Result<(), sqlx::Error>) -> Result<EventWrite, sqlx::Error> {
@@ -131,10 +163,15 @@ impl PostgresCalendarEventSource {
                       (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS "starts_at_millis!",
                       (extract(epoch FROM calendar_events.ends_at) * 1000)::bigint AS ends_at_millis,
                       (extract(epoch FROM calendar_events.finished_at) * 1000)::bigint AS finished_at_millis,
-                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis
+                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis,
+                      calendar_events.time_zone,
+                      calendar_events.series_id,
+                      (extract(epoch FROM calendar_events.original_start) * 1000)::bigint AS original_start_millis,
+                      event_series.repeat_rule AS "series_repeat_rule?: Json<RepeatRule>"
                FROM calendar_events
                LEFT JOIN tasks ON tasks.id = calendar_events.task_id
                LEFT JOIN cards ON cards.id = calendar_events.card_id
+               LEFT JOIN event_series ON event_series.id = calendar_events.series_id
                WHERE calendar_events.user_id = $1
                  AND calendar_events.starts_at < 'epoch'::timestamptz + $3::bigint * interval '1 millisecond'
                  AND coalesce(calendar_events.ends_at, now())
@@ -168,10 +205,15 @@ impl PostgresCalendarEventSource {
                       (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS "starts_at_millis!",
                       (extract(epoch FROM calendar_events.ends_at) * 1000)::bigint AS ends_at_millis,
                       (extract(epoch FROM calendar_events.finished_at) * 1000)::bigint AS finished_at_millis,
-                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis
+                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis,
+                      calendar_events.time_zone,
+                      calendar_events.series_id,
+                      (extract(epoch FROM calendar_events.original_start) * 1000)::bigint AS original_start_millis,
+                      event_series.repeat_rule AS "series_repeat_rule?: Json<RepeatRule>"
                FROM calendar_events
                LEFT JOIN tasks ON tasks.id = calendar_events.task_id
                LEFT JOIN cards ON cards.id = calendar_events.card_id
+               LEFT JOIN event_series ON event_series.id = calendar_events.series_id
                WHERE calendar_events.id = $2 AND calendar_events.user_id = $1
                FOR UPDATE OF calendar_events"#,
             user_id,
@@ -182,6 +224,110 @@ impl PostgresCalendarEventSource {
         Ok(event_row.map(CalendarEvent::from))
     }
 
+    pub async fn find_override_locked(
+        &self,
+        executor: impl PgExecutor<'_>,
+        user_id: Uuid,
+        series_id: Uuid,
+        original_start: UtcInstant,
+    ) -> Result<Option<CalendarEvent>, sqlx::Error> {
+        let event_row = sqlx::query_as!(
+            CalendarEventRow,
+            r#"SELECT calendar_events.id,
+                      calendar_events.kind = 'tracked' AS "is_tracked!",
+                      calendar_events.title,
+                      calendar_events.category_id,
+                      calendar_events.task_id,
+                      NULL::uuid AS "task_group_id?",
+                      calendar_events.card_id,
+                      NULL::uuid AS "card_board_id?",
+                      (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS "starts_at_millis!",
+                      (extract(epoch FROM calendar_events.ends_at) * 1000)::bigint AS ends_at_millis,
+                      (extract(epoch FROM calendar_events.finished_at) * 1000)::bigint AS finished_at_millis,
+                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis,
+                      calendar_events.time_zone,
+                      calendar_events.series_id,
+                      (extract(epoch FROM calendar_events.original_start) * 1000)::bigint AS original_start_millis,
+                      event_series.repeat_rule AS "series_repeat_rule?: Json<RepeatRule>"
+               FROM calendar_events
+               JOIN event_series ON event_series.id = calendar_events.series_id
+               WHERE calendar_events.user_id = $1
+                 AND calendar_events.series_id = $2
+                 AND calendar_events.original_start
+                     = 'epoch'::timestamptz + $3::bigint * interval '1 millisecond'
+               FOR UPDATE OF calendar_events"#,
+            user_id,
+            series_id,
+            original_start.unix_millis(),
+        )
+        .fetch_optional(executor)
+        .await?;
+        Ok(event_row.map(CalendarEvent::from))
+    }
+
+    pub async fn list_override_starts(
+        &self,
+        executor: impl PgExecutor<'_>,
+        series_id: Uuid,
+    ) -> Result<Vec<UtcInstant>, sqlx::Error> {
+        let original_start_millis = sqlx::query_scalar!(
+            r#"SELECT (extract(epoch FROM original_start) * 1000)::bigint AS "original_start_millis!"
+               FROM calendar_events
+               WHERE series_id = $1
+               ORDER BY original_start"#,
+            series_id,
+        )
+        .fetch_all(executor)
+        .await?;
+        Ok(original_start_millis
+            .into_iter()
+            .map(UtcInstant::from_unix_millis)
+            .collect())
+    }
+
+    pub async fn delete_overrides(
+        &self,
+        executor: impl PgExecutor<'_>,
+        series_id: Uuid,
+        original_starts: &[UtcInstant],
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            "DELETE FROM calendar_events
+             WHERE series_id = $1
+               AND original_start = ANY(
+                   SELECT 'epoch'::timestamptz + start_millis * interval '1 millisecond'
+                   FROM unnest($2::bigint[]) AS start_millis)",
+            series_id,
+            &starts_millis_of(original_starts),
+        )
+        .execute(executor)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn move_overrides(
+        &self,
+        executor: impl PgExecutor<'_>,
+        from_series_id: Uuid,
+        to_series_id: Uuid,
+        original_starts: &[UtcInstant],
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            "UPDATE calendar_events
+             SET series_id = $2, updated_at = now()
+             WHERE series_id = $1
+               AND original_start = ANY(
+                   SELECT 'epoch'::timestamptz + start_millis * interval '1 millisecond'
+                   FROM unnest($3::bigint[]) AS start_millis)",
+            from_series_id,
+            to_series_id,
+            &starts_millis_of(original_starts),
+        )
+        .execute(executor)
+        .await?;
+        Ok(())
+    }
+
     pub async fn insert(
         &self,
         executor: impl PgExecutor<'_>,
@@ -190,12 +336,15 @@ impl PostgresCalendarEventSource {
         let insert_result = sqlx::query!(
             "INSERT INTO calendar_events
                  (id, user_id, kind, title, category_id, task_id, card_id,
-                  starts_at, ends_at, finished_at, last_answered_at)
+                  starts_at, ends_at, finished_at, last_answered_at,
+                  time_zone, series_id, original_start)
              VALUES ($1, $2, $3, $4, $5, $6, $7,
                      'epoch'::timestamptz + $8::bigint * interval '1 millisecond',
                      'epoch'::timestamptz + $9::bigint * interval '1 millisecond',
                      'epoch'::timestamptz + $10::bigint * interval '1 millisecond',
-                     'epoch'::timestamptz + $11::bigint * interval '1 millisecond')",
+                     'epoch'::timestamptz + $11::bigint * interval '1 millisecond',
+                     $12, $13,
+                     'epoch'::timestamptz + $14::bigint * interval '1 millisecond')",
             new_event.id,
             new_event.user_id,
             new_event.kind.as_str(),
@@ -207,6 +356,9 @@ impl PostgresCalendarEventSource {
             millis_of(new_event.ends_at),
             millis_of(new_event.finished_at),
             millis_of(new_event.last_answered_at),
+            new_event.time_zone.as_deref(),
+            new_event.series_id,
+            millis_of(new_event.original_start),
         )
         .execute(executor)
         .await
@@ -228,6 +380,7 @@ impl PostgresCalendarEventSource {
                  starts_at = 'epoch'::timestamptz + $5::bigint * interval '1 millisecond',
                  ends_at = 'epoch'::timestamptz + $6::bigint * interval '1 millisecond',
                  finished_at = 'epoch'::timestamptz + $7::bigint * interval '1 millisecond',
+                 time_zone = $8,
                  updated_at = now()
              WHERE id = $2 AND user_id = $1",
             user_id,
@@ -237,6 +390,7 @@ impl PostgresCalendarEventSource {
             changed_event.starts_at.unix_millis(),
             millis_of(changed_event.ends_at),
             millis_of(changed_event.finished_at),
+            changed_event.time_zone.as_deref(),
         )
         .execute(executor)
         .await
@@ -561,6 +715,9 @@ pub mod tests {
             },
             finished_at: None,
             last_answered_at: None,
+            time_zone: None,
+            series_id: None,
+            original_start: None,
         }
     }
 
@@ -620,6 +777,8 @@ pub mod tests {
                 ends_at: Some(instant("2026-11-05T09:40:00.123Z")),
                 finished_at: Some(instant("2026-11-05T10:00:00Z")),
                 last_answered_at: Some(instant("2026-11-05T09:40:00.123Z")),
+                time_zone: None,
+                series: None,
             }
         );
     }
@@ -743,6 +902,7 @@ pub mod tests {
                     starts_at: instant("2026-11-06T18:00:00Z"),
                     ends_at: Some(instant("2026-11-07T19:00:00Z")),
                     finished_at: None,
+                    time_zone: Some(String::from("Europe/London")),
                 },
             )
             .await
@@ -754,6 +914,7 @@ pub mod tests {
         assert_eq!(updated_event.category_id, Some(category_id));
         assert_eq!(updated_event.starts_at, instant("2026-11-06T18:00:00Z"));
         assert_eq!(updated_event.ends_at, Some(instant("2026-11-07T19:00:00Z")));
+        assert_eq!(updated_event.time_zone.as_deref(), Some("Europe/London"));
     }
 
     pub fn new_running_event(

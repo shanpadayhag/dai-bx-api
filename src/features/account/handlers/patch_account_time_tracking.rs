@@ -8,7 +8,8 @@ use crate::core::json_field::deserialize_present_field;
 use crate::core::state::AppState;
 use crate::features::account::actions::update_time_tracking_settings::UpdateTimeTrackingSettings;
 use crate::features::account::entities::time_tracking_settings::{
-    TimeTrackingChanges, validate_check_in_minutes, validate_clock_time,
+    TimeTrackingChanges, validate_calendar_time_zone, validate_check_in_minutes,
+    validate_clock_time,
 };
 use crate::features::account::responses::time_tracking_settings_response::TimeTrackingSettingsResponse;
 use crate::features::sessions::entities::current_session::CurrentSession;
@@ -23,6 +24,8 @@ pub struct PatchTimeTrackingRequest {
     pub working_hours_end: Option<String>,
     #[serde(default, deserialize_with = "deserialize_present_field")]
     pub tracked_category_id: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_present_field")]
+    pub calendar_time_zone: Option<Option<String>>,
 }
 
 pub async fn patch_account_time_tracking(
@@ -58,6 +61,15 @@ pub async fn patch_account_time_tracking(
                     .map(Uuid::parse_str)
                     .transpose()
                     .map_err(|_| AppError::NotFound)
+            })
+            .transpose()?,
+        calendar_time_zone_change: patch_request
+            .calendar_time_zone
+            .map(|calendar_time_zone| {
+                calendar_time_zone
+                    .as_deref()
+                    .map(validate_calendar_time_zone)
+                    .transpose()
             })
             .transpose()?,
     };

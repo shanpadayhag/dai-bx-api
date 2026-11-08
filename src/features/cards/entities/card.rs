@@ -1,6 +1,7 @@
 use uuid::Uuid;
 
 use crate::features::boards::entities::board::{BoardCard, BoardPropertyKind, CardValueContent};
+use crate::features::card_schedules::entities::card_schedule::CardSchedule;
 use crate::features::cards::error::CardError;
 
 pub const CARD_TITLE_MAX_CHARACTERS: usize = 500;
@@ -41,6 +42,7 @@ pub struct CardDetail {
     pub notes: String,
     pub linked_tasks: Vec<LinkedTask>,
     pub tracked_event_count: i64,
+    pub schedules: Vec<CardSchedule>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

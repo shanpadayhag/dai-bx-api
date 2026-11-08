@@ -1,5 +1,7 @@
 pub mod create;
 mod delete;
-mod list;
-mod update;
+pub mod list;
+mod occurrences;
+mod series;
+pub mod update;
 mod write_limit;

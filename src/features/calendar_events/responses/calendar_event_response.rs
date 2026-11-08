@@ -1,7 +1,16 @@
+use crate::core::recurrence::RepeatRule;
 use crate::features::calendar_events::entities::calendar_event::{
-    CalendarEvent, CalendarEventSource,
+    CalendarEvent, CalendarEventSource, SeriesOccurrence,
 };
 use serde::Serialize;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesOccurrenceResponse {
+    pub id: String,
+    pub original_start: String,
+    pub repeat: RepeatRule,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -24,12 +33,22 @@ pub struct CalendarEventResponse {
     pub finished_at: Option<String>,
     pub last_answered_at: Option<String>,
     pub source: Option<CalendarEventSourceResponse>,
+    pub time_zone: Option<String>,
+    pub series: Option<SeriesOccurrenceResponse>,
 }
 
 impl From<CalendarEvent> for CalendarEventResponse {
     fn from(calendar_event: CalendarEvent) -> Self {
+        let event_id = match &calendar_event.series {
+            Some(series_occurrence) => format!(
+                "{}:{}",
+                series_occurrence.series_id,
+                series_occurrence.original_start.to_iso_text()
+            ),
+            None => calendar_event.id.to_string(),
+        };
         Self {
-            id: calendar_event.id.to_string(),
+            id: event_id,
             kind: calendar_event.kind.as_str(),
             title: calendar_event.title,
             category_id: calendar_event
@@ -59,6 +78,16 @@ impl From<CalendarEvent> for CalendarEventResponse {
                         }
                     }
                 }),
+            time_zone: calendar_event.time_zone,
+            series: calendar_event
+                .series
+                .map(
+                    |series_occurrence: SeriesOccurrence| SeriesOccurrenceResponse {
+                        id: series_occurrence.series_id.to_string(),
+                        original_start: series_occurrence.original_start.to_iso_text(),
+                        repeat: series_occurrence.repeat_rule,
+                    },
+                ),
         }
     }
 }

@@ -98,6 +98,7 @@ impl PostgresCardSource {
                 values: Vec::new(),
                 linked_task_count: 0,
                 done_linked_task_count: 0,
+                next_move: None,
             },
             notes: card_row.notes,
             tracked_event_count: card_row.tracked_event_count,

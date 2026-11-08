@@ -15,6 +15,7 @@ env:
   CARGO_TERM_COLOR: always
   AWS_REGION: ap-southeast-1
   FUNCTION_NAME: daibx-api-prod
+  SCHEDULER_FUNCTION_NAME: daibx-scheduler-prod
   DEPLOY_ROLE_ARN: arn:aws:iam::566252491895:role/daibx-api-prod-deploy
   FUNCTION_URL: https://feezjo6k7aw7kbbtgqhgojacre0menau.lambda-url.ap-southeast-1.on.aws/
   SQLX_CLI_VERSION: 0.9.0
@@ -67,7 +68,7 @@ jobs:
       - name: Build
         env:
           SQLX_OFFLINE: "true"
-        run: cargo lambda build --release --arm64 --output-format zip --bin daibx-api
+        run: cargo lambda build --release --arm64 --output-format zip --bin daibx-api --bin daibx-scheduler
 
       - uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -81,6 +82,11 @@ jobs:
             --zip-file fileb://target/lambda/daibx-api/bootstrap.zip \
             --query LastUpdateStatus --output text
           aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
+          aws lambda update-function-code \
+            --function-name "$SCHEDULER_FUNCTION_NAME" \
+            --zip-file fileb://target/lambda/daibx-scheduler/bootstrap.zip \
+            --query LastUpdateStatus --output text
+          aws lambda wait function-updated-v2 --function-name "$SCHEDULER_FUNCTION_NAME"
 
       - name: Check health
         run: curl --fail --silent --show-error --retry 3 --retry-delay 2 "${FUNCTION_URL}health"

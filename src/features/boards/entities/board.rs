@@ -1,5 +1,6 @@
 use uuid::Uuid;
 
+use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::error::BoardError;
 
 pub const BOARD_NAME_MAX_CHARACTERS: usize = 100;
@@ -35,6 +36,13 @@ pub struct BoardCard {
     pub values: Vec<CardValue>,
     pub linked_task_count: i64,
     pub done_linked_task_count: i64,
+    pub next_move: Option<NextMove>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NextMove {
+    pub at: UtcInstant,
+    pub list_name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

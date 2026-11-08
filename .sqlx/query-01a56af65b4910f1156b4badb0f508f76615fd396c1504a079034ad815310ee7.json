@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (extract(epoch FROM until_instant) * 1000)::bigint AS \"until_millis!\"\n               FROM event_series WHERE user_id = $1 AND schedule_id IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "until_millis!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "01a56af65b4910f1156b4badb0f508f76615fd396c1504a079034ad815310ee7"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE event_series SET hidden = $2, updated_at = now() WHERE schedule_id = ANY($1::uuid[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b97906a31de42591a58923cb4b596a21248251db1df67e8d47d8bccd667c1cdc"
+}

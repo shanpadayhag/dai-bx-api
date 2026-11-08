@@ -1,5 +1,6 @@
 use uuid::Uuid;
 
+use crate::core::recurrence::parse_time_zone;
 use crate::features::account::error::AccountError;
 
 pub const CHECK_IN_MINUTES_RANGE: std::ops::RangeInclusive<i32> = 5..=240;
@@ -12,6 +13,7 @@ pub struct TimeTrackingSettings {
     pub working_hours_start: String,
     pub working_hours_end: String,
     pub tracked_category_id: Option<Uuid>,
+    pub calendar_time_zone: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -22,6 +24,7 @@ pub struct TimeTrackingChanges {
     pub working_hours_start: Option<String>,
     pub working_hours_end: Option<String>,
     pub tracked_category_change: Option<Option<Uuid>>,
+    pub calendar_time_zone_change: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +39,16 @@ pub fn validate_check_in_minutes(raw_minutes: i64) -> Result<i32, AccountError> 
         .ok()
         .filter(|check_in_minutes| CHECK_IN_MINUTES_RANGE.contains(check_in_minutes))
         .ok_or_else(|| AccountError::Invalid(String::from("check-ins are 5 to 240 minutes apart")))
+}
+
+pub fn validate_calendar_time_zone(raw_zone_name: &str) -> Result<String, AccountError> {
+    parse_time_zone(raw_zone_name)
+        .map(|_| raw_zone_name.to_owned())
+        .ok_or_else(|| {
+            AccountError::Invalid(String::from(
+                "the calendar time zone is a name like Asia/Manila",
+            ))
+        })
 }
 
 pub fn validate_clock_time(raw_time: &str) -> Result<String, AccountError> {
@@ -74,6 +87,20 @@ mod tests {
             assert!(
                 validate_check_in_minutes(refused_minutes).is_err(),
                 "{refused_minutes}"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_only_named_calendar_time_zones() {
+        assert_eq!(
+            validate_calendar_time_zone("Europe/London").ok().as_deref(),
+            Some("Europe/London")
+        );
+        for refused_zone_name in ["", "+08:00", "Mars/Olympus"] {
+            assert!(
+                validate_calendar_time_zone(refused_zone_name).is_err(),
+                "{refused_zone_name}"
             );
         }
     }

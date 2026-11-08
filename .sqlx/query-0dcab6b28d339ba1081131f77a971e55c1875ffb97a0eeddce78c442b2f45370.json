@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (extract(epoch FROM original_start) * 1000)::bigint AS \"original_start_millis!\"\n               FROM calendar_events\n               WHERE series_id = $1\n               ORDER BY original_start",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "original_start_millis!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0dcab6b28d339ba1081131f77a971e55c1875ffb97a0eeddce78c442b2f45370"
+}

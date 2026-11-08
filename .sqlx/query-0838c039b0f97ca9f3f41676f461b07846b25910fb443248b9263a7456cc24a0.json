@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH ordered_runs AS (\n                   SELECT id, ran_at, how, moved,\n                          coalesce(\n                              lead(ran_at) OVER (ORDER BY ran_at, id),\n                              'epoch'::timestamptz + $5::bigint * interval '1 millisecond'\n                          ) AS window_end\n                   FROM schedule_runs\n                   WHERE schedule_id = $1\n               )\n               SELECT ordered_runs.id,\n                      (extract(epoch FROM ordered_runs.ran_at) * 1000)::bigint AS \"ran_at_millis!\",\n                      ordered_runs.how,\n                      ordered_runs.moved,\n                      coalesce(\n                          (SELECT floor(sum(extract(epoch FROM\n                                      least(\n                                          coalesce(calendar_events.ends_at,\n                                                   'epoch'::timestamptz + $5::bigint * interval '1 millisecond'),\n                                          ordered_runs.window_end\n                                      ) - greatest(calendar_events.starts_at, ordered_runs.ran_at)\n                                  )) / 60)::bigint\n                           FROM calendar_events\n                           WHERE calendar_events.card_id = $2\n                             AND calendar_events.kind = 'tracked'\n                             AND calendar_events.starts_at < ordered_runs.window_end\n                             AND coalesce(calendar_events.ends_at,\n                                          'epoch'::timestamptz + $5::bigint * interval '1 millisecond')\n                                 > ordered_runs.ran_at),\n                          0\n                      ) AS \"tracked_minutes!\"\n               FROM ordered_runs\n               WHERE $3::bigint IS NULL\n                  OR ordered_runs.ran_at < 'epoch'::timestamptz + $3::bigint * interval '1 millisecond'\n               ORDER BY ordered_runs.ran_at DESC, ordered_runs.id DESC\n               LIMIT $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "schedule_runs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "ran_at_millis!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "how",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "schedule_runs",
+            "name": "how"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "moved",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "schedule_runs",
+            "name": "moved"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "tracked_minutes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "0838c039b0f97ca9f3f41676f461b07846b25910fb443248b9263a7456cc24a0"
+}

@@ -1,4 +1,5 @@
 use crate::core::error::AppError;
+use crate::features::card_schedules::error::ScheduleError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CalendarEventError {
@@ -23,6 +24,16 @@ impl From<CalendarEventError> for AppError {
             CalendarEventError::Database(database_error) => {
                 AppError::Internal(database_error.into())
             }
+        }
+    }
+}
+
+impl From<ScheduleError> for CalendarEventError {
+    fn from(schedule_error: ScheduleError) -> Self {
+        match schedule_error {
+            ScheduleError::Invalid(invalid_message) => CalendarEventError::Invalid(invalid_message),
+            ScheduleError::NotFound => CalendarEventError::NotFound,
+            ScheduleError::Database(database_error) => CalendarEventError::Database(database_error),
         }
     }
 }

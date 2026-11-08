@@ -1,11 +1,17 @@
+use jiff::civil::{Date, Time};
+use jiff::tz::TimeZone;
 use uuid::Uuid;
 
+use crate::core::recurrence::{
+    RepeatRule, parse_calendar_date, parse_local_moment, parse_time_zone, to_instant,
+};
 use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::error::CalendarEventError;
+use crate::features::card_schedules::entities::card_schedule::ScheduledMove;
 
 pub const PLANNED_TITLE_MAX_CHARACTERS: usize = 200;
 pub const PLANNED_MINIMUM_MINUTES: i64 = 15;
-pub const RANGE_MAXIMUM_DAYS: i64 = 42;
+pub const RANGE_DAY_COUNTS: [i64; 2] = [1, 7];
 pub const FINISH_CLOCK_SKEW_MINUTES: i64 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +36,13 @@ pub enum CalendarEventSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeriesOccurrence {
+    pub series_id: Uuid,
+    pub original_start: UtcInstant,
+    pub repeat_rule: RepeatRule,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CalendarEvent {
     pub id: Uuid,
     pub kind: CalendarEventKind,
@@ -40,6 +53,8 @@ pub struct CalendarEvent {
     pub ends_at: Option<UtcInstant>,
     pub finished_at: Option<UtcInstant>,
     pub last_answered_at: Option<UtcInstant>,
+    pub time_zone: Option<String>,
+    pub series: Option<SeriesOccurrence>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,22 +70,53 @@ pub struct NewCalendarEvent {
     pub ends_at: Option<UtcInstant>,
     pub finished_at: Option<UtcInstant>,
     pub last_answered_at: Option<UtcInstant>,
+    pub time_zone: Option<String>,
+    pub series_id: Option<Uuid>,
+    pub original_start: Option<UtcInstant>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
+pub struct NamedTimeZone {
+    pub name: String,
+    pub time_zone: TimeZone,
+}
+
+#[derive(Debug, Clone)]
+pub struct EventRepeat {
+    pub repeat_rule: RepeatRule,
+    pub input_zone: NamedTimeZone,
+}
+
+impl EventRepeat {
+    pub fn series_zone(
+        &self,
+        event_zone_name: Option<&str>,
+    ) -> Result<NamedTimeZone, CalendarEventError> {
+        event_zone_name.map_or_else(
+            || Ok(self.input_zone.clone()),
+            |event_zone_name| parse_event_zone(event_zone_name, "timeZone"),
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct PlannedEventInput {
     pub title: String,
     pub category_id: Option<Uuid>,
     pub starts_at: UtcInstant,
     pub ends_at: UtcInstant,
+    pub time_zone: Option<String>,
+    pub repeat: Option<EventRepeat>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default)]
 pub struct CalendarEventChanges {
     pub title: Option<String>,
     pub category_change: Option<Option<Uuid>>,
     pub starts_at: Option<UtcInstant>,
     pub ends_at: Option<UtcInstant>,
+    pub time_zone_change: Option<Option<String>>,
+    pub repeat: Option<EventRepeat>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,6 +126,13 @@ pub struct ChangedCalendarEvent {
     pub starts_at: UtcInstant,
     pub ends_at: Option<UtcInstant>,
     pub finished_at: Option<UtcInstant>,
+    pub time_zone: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CalendarRange {
+    pub events: Vec<CalendarEvent>,
+    pub moves: Vec<ScheduledMove>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -163,6 +216,7 @@ impl CalendarEvent {
             starts_at: self.starts_at,
             ends_at: Some(ends_at),
             finished_at: Some(now),
+            time_zone: None,
         })
     }
 
@@ -186,11 +240,20 @@ impl CalendarEvent {
                     starts_at,
                     ends_at: Some(ends_at),
                     finished_at: None,
+                    time_zone: event_changes
+                        .time_zone_change
+                        .clone()
+                        .unwrap_or_else(|| self.time_zone.clone()),
                 })
             }
             CalendarEventKind::Tracked => {
                 if event_changes.title.is_some() {
                     return Err(invalid("a tracked event keeps its task's or card's name"));
+                }
+                if event_changes.time_zone_change.is_some() || event_changes.repeat.is_some() {
+                    return Err(invalid(
+                        "a tracked event shows in the calendar's zone and doesn't repeat",
+                    ));
                 }
                 let changes_times =
                     event_changes.starts_at.is_some() || event_changes.ends_at.is_some();
@@ -204,6 +267,7 @@ impl CalendarEvent {
                         starts_at,
                         ends_at: None,
                         finished_at: None,
+                        time_zone: None,
                     });
                 };
                 let ends_at = event_changes.ends_at.unwrap_or(current_ends_at);
@@ -220,6 +284,7 @@ impl CalendarEvent {
                     starts_at,
                     ends_at: Some(ends_at),
                     finished_at,
+                    time_zone: None,
                 })
             }
         }
@@ -250,6 +315,33 @@ pub fn parse_event_instant(
     })
 }
 
+pub fn parse_event_zone(
+    zone_name: &str,
+    field_name: &str,
+) -> Result<NamedTimeZone, CalendarEventError> {
+    let time_zone = parse_time_zone(zone_name).ok_or_else(|| {
+        CalendarEventError::Invalid(format!("{field_name} is a time zone name like Asia/Manila"))
+    })?;
+    Ok(NamedTimeZone {
+        name: zone_name.to_owned(),
+        time_zone,
+    })
+}
+
+pub fn parse_event_moment(
+    moment_text: &str,
+    field_name: &str,
+    input_zone: &NamedTimeZone,
+) -> Result<UtcInstant, CalendarEventError> {
+    parse_local_moment(moment_text)
+        .and_then(|local_moment| to_instant(local_moment, &input_zone.time_zone))
+        .ok_or_else(|| {
+            CalendarEventError::Invalid(format!(
+                "{field_name} is a local time like 2026-11-09T18:00"
+            ))
+        })
+}
+
 pub fn validate_planned_times(
     starts_at: UtcInstant,
     ends_at: UtcInstant,
@@ -264,16 +356,31 @@ pub fn validate_planned_times(
 }
 
 pub fn validate_event_range(
-    from: UtcInstant,
-    to: UtcInstant,
+    start_text: &str,
+    day_count_text: &str,
+    range_zone: &NamedTimeZone,
 ) -> Result<EventRange, CalendarEventError> {
-    if to <= from {
-        return Err(invalid("a range ends after it starts"));
-    }
-    if to > from.plus_days(RANGE_MAXIMUM_DAYS) {
-        return Err(invalid("a range is at most 42 days"));
-    }
-    Ok(EventRange { from, to })
+    let start_date = parse_calendar_date(start_text)
+        .ok_or_else(|| invalid("start is a date like 2026-11-09"))?;
+    let day_count = day_count_text
+        .parse::<i64>()
+        .ok()
+        .filter(|day_count| RANGE_DAY_COUNTS.contains(day_count))
+        .ok_or_else(|| invalid("days is 1 or 7"))?;
+    let end_date = start_date
+        .checked_add(jiff::Span::new().days(day_count))
+        .map_err(|_| invalid("start is a date like 2026-11-09"))?;
+    let midnight_instant = |range_date: Date| {
+        to_instant(
+            range_date.to_datetime(Time::midnight()),
+            &range_zone.time_zone,
+        )
+        .ok_or_else(|| invalid("start is a date like 2026-11-09"))
+    };
+    Ok(EventRange {
+        from: midnight_instant(start_date)?,
+        to: midnight_instant(end_date)?,
+    })
 }
 
 #[cfg(test)]
@@ -295,6 +402,8 @@ mod tests {
             ends_at: ends_at.map(instant),
             finished_at: finished_at.map(instant),
             last_answered_at: None,
+            time_zone: None,
+            series: None,
         }
     }
 
@@ -404,6 +513,8 @@ mod tests {
                     category_change: Some(Some(category_id)),
                     starts_at: Some(instant("2026-11-06T18:00:00Z")),
                     ends_at: Some(instant("2026-11-08T19:00:00Z")),
+                    time_zone_change: Some(Some(String::from("Europe/London"))),
+                    repeat: None,
                 },
                 instant(NOW),
             )
@@ -417,6 +528,7 @@ mod tests {
                 starts_at: instant("2026-11-06T18:00:00Z"),
                 ends_at: Some(instant("2026-11-08T19:00:00Z")),
                 finished_at: None,
+                time_zone: Some(String::from("Europe/London")),
             }
         );
     }
@@ -582,11 +694,71 @@ mod tests {
     }
 
     #[test]
-    fn allows_ranges_up_to_42_days() {
-        let from = instant("2026-11-01T00:00:00Z");
+    fn a_tracked_event_has_no_zone_or_repeat_of_its_own() {
+        let finished_event =
+            tracked_event(Some("2026-11-05T09:40:00Z"), Some("2026-11-05T10:00:00Z"));
+        let utc_zone = parse_event_zone("UTC", "inputZone").expect("a known zone");
 
-        assert!(validate_event_range(from, instant("2026-12-13T00:00:00Z")).is_ok());
-        assert!(validate_event_range(from, instant("2026-12-13T00:00:00.001Z")).is_err());
-        assert!(validate_event_range(from, from).is_err());
+        for refused_changes in [
+            CalendarEventChanges {
+                time_zone_change: Some(Some(String::from("Europe/London"))),
+                ..CalendarEventChanges::default()
+            },
+            CalendarEventChanges {
+                repeat: Some(EventRepeat {
+                    repeat_rule: serde_json::from_str(
+                        r#"{"frequency":"daily","interval":1,"ends":{"never":true}}"#,
+                    )
+                    .expect("a valid rule"),
+                    input_zone: utc_zone,
+                }),
+                ..CalendarEventChanges::default()
+            },
+        ] {
+            let refused = finished_event.apply_changes(&refused_changes, instant(NOW));
+            assert!(matches!(refused, Err(CalendarEventError::Invalid(_))));
+        }
+    }
+
+    #[test]
+    fn reads_a_local_time_in_its_input_zone() {
+        let manila = parse_event_zone("Asia/Manila", "inputZone").expect("a known zone");
+
+        assert_eq!(
+            parse_event_moment("2026-11-09T18:00", "start", &manila).ok(),
+            Some(instant("2026-11-09T10:00:00Z"))
+        );
+        for refused_text in ["2026-11-09T18:00:00Z", "2026-11-09", "tomorrow"] {
+            assert!(parse_event_moment(refused_text, "start", &manila).is_err());
+        }
+        assert!(parse_event_zone("Mars/Olympus", "inputZone").is_err());
+    }
+
+    #[test]
+    fn takes_whole_days_from_midnight_in_the_range_zone() {
+        let london = parse_event_zone("Europe/London", "timeZone").expect("a known zone");
+
+        assert_eq!(
+            validate_event_range("2026-10-25", "1", &london).ok(),
+            Some(EventRange {
+                from: instant("2026-10-24T23:00:00Z"),
+                to: instant("2026-10-26T00:00:00Z"),
+            })
+        );
+        assert_eq!(
+            validate_event_range("2026-11-02", "7", &london).ok(),
+            Some(EventRange {
+                from: instant("2026-11-02T00:00:00Z"),
+                to: instant("2026-11-09T00:00:00Z"),
+            })
+        );
+        for (start_text, day_count_text) in [
+            ("2026-11-02", "3"),
+            ("2026-11-02", ""),
+            ("2026-02-30", "1"),
+            ("2026-11-02T00:00:00Z", "1"),
+        ] {
+            assert!(validate_event_range(start_text, day_count_text, &london).is_err());
+        }
     }
 }

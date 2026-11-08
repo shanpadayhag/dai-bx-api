@@ -44,7 +44,8 @@ impl PostgresAccountSource {
                       first_check_in_minutes,
                       to_char(working_hours_start, 'HH24:MI') AS "working_hours_start!",
                       to_char(working_hours_end, 'HH24:MI') AS "working_hours_end!",
-                      tracked_category_id
+                      tracked_category_id,
+                      calendar_time_zone
                FROM users
                WHERE id = $1"#,
             user_id,
@@ -68,6 +69,7 @@ impl PostgresAccountSource {
                    working_hours_start = coalesce($5::text::time, working_hours_start),
                    working_hours_end = coalesce($6::text::time, working_hours_end),
                    tracked_category_id = CASE WHEN $7 THEN $8 ELSE tracked_category_id END,
+                   calendar_time_zone = CASE WHEN $9 THEN $10 ELSE calendar_time_zone END,
                    updated_at = now()
                WHERE id = $1
                RETURNING check_ins_enabled,
@@ -75,7 +77,8 @@ impl PostgresAccountSource {
                          first_check_in_minutes,
                          to_char(working_hours_start, 'HH24:MI') AS "working_hours_start!",
                          to_char(working_hours_end, 'HH24:MI') AS "working_hours_end!",
-                         tracked_category_id"#,
+                         tracked_category_id,
+                         calendar_time_zone"#,
             user_id,
             time_tracking_changes.check_ins_enabled,
             time_tracking_changes.check_in_interval_minutes,
@@ -84,6 +87,11 @@ impl PostgresAccountSource {
             time_tracking_changes.working_hours_end.as_deref(),
             time_tracking_changes.tracked_category_change.is_some(),
             time_tracking_changes.tracked_category_change.flatten(),
+            time_tracking_changes.calendar_time_zone_change.is_some(),
+            time_tracking_changes
+                .calendar_time_zone_change
+                .as_ref()
+                .and_then(Option::as_deref),
         )
         .fetch_optional(executor)
         .await;
@@ -238,6 +246,7 @@ mod tests {
             &TimeTrackingChanges {
                 working_hours_end: Some(String::from("01:30")),
                 tracked_category_change: Some(Some(category_id)),
+                calendar_time_zone_change: Some(Some(String::from("Europe/London"))),
                 ..TimeTrackingChanges::default()
             },
         )
@@ -250,6 +259,7 @@ mod tests {
             working_hours_start: String::from("16:00"),
             working_hours_end: String::from("01:30"),
             tracked_category_id: Some(category_id),
+            calendar_time_zone: Some(String::from("Europe/London")),
         };
         assert_eq!(
             time_tracking_write,

@@ -2,9 +2,9 @@ use axum::http::StatusCode;
 use sqlx::PgPool;
 
 use crate::calendar_events::create::{create_planned_event, event_id};
+use crate::calendar_events::list::list_events;
 use crate::support::{
-    build_test_app, delete_with_cookies, get_with_cookies, response_json,
-    sign_up_with_authenticator,
+    build_test_app, delete_with_cookies, response_json, sign_up_with_authenticator,
 };
 
 #[sqlx::test]
@@ -14,8 +14,8 @@ async fn deletes_a_planned_event(db_pool: PgPool) {
         &db_pool,
         &signed_in_person,
         "Gym",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
 
@@ -28,16 +28,13 @@ async fn deletes_a_planned_event(db_pool: PgPool) {
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response_json(response).await["status"], "deleted");
-    let listed_events = response_json(
-        get_with_cookies(
-            build_test_app(db_pool),
-            "/calendar/events?from=2026-11-02T00:00:00Z&to=2026-11-09T00:00:00Z",
-            &signed_in_person.session_cookies,
-        )
-        .await,
+    let listed_events = list_events(
+        &db_pool,
+        &signed_in_person,
+        "start=2026-11-02&days=7&timeZone=UTC",
     )
     .await;
-    assert_eq!(listed_events, serde_json::json!([]));
+    assert!(listed_events.is_empty());
 }
 
 #[sqlx::test]
@@ -48,16 +45,16 @@ async fn answers_not_found_for_someone_else_s_or_an_already_deleted_event(db_poo
         &db_pool,
         &other_person,
         "Theirs",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
     let my_event = create_planned_event(
         &db_pool,
         &signed_in_person,
         "Mine",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
     let my_event_path = format!("/calendar/events/{}", event_id(&my_event));
@@ -89,8 +86,8 @@ async fn deleting_an_event_needs_a_session(db_pool: PgPool) {
         &db_pool,
         &signed_in_person,
         "Gym",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
 

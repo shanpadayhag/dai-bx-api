@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_events\n             SET title = $3,\n                 category_id = $4,\n                 starts_at = 'epoch'::timestamptz + $5::bigint * interval '1 millisecond',\n                 ends_at = 'epoch'::timestamptz + $6::bigint * interval '1 millisecond',\n                 finished_at = 'epoch'::timestamptz + $7::bigint * interval '1 millisecond',\n                 time_zone = $8,\n                 updated_at = now()\n             WHERE id = $2 AND user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bf416b534a4860f4f40fde6d67f4d9f6995bc5dec551355192c8249316d07629"
+}

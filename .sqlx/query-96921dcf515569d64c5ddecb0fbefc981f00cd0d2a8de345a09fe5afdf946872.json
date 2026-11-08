@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE event_exceptions\n             SET series_id = $2\n             WHERE series_id = $1\n               AND original_start = ANY(\n                   SELECT 'epoch'::timestamptz + start_millis * interval '1 millisecond'\n                   FROM unnest($3::bigint[]) AS start_millis)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "96921dcf515569d64c5ddecb0fbefc981f00cd0d2a8de345a09fe5afdf946872"
+}

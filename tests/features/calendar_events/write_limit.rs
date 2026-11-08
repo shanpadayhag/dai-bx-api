@@ -14,8 +14,8 @@ async fn event_writes_share_the_600_writes_in_ten_minutes_limit(db_pool: PgPool)
         &db_pool,
         &signed_in_person,
         "Gym",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
     let event_path = format!("/calendar/events/{}", event_id(&gym_event));

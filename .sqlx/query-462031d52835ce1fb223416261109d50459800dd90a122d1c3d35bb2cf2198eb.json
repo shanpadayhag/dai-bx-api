@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_events SET schedule_id = NULL, updated_at = now() WHERE schedule_id = ANY($1::uuid[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "462031d52835ce1fb223416261109d50459800dd90a122d1c3d35bb2cf2198eb"
+}

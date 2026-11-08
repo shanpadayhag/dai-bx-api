@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id AS schedule_id, user_id\n             FROM card_schedules\n             WHERE NOT paused\n               AND target_list_id IS NOT NULL\n               AND next_run_at <= 'epoch'::timestamptz + $1::bigint * interval '1 millisecond'\n             ORDER BY next_run_at, id\n             LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "schedule_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "user_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "b15662e044d5e7b872b4b14d65d26c94d9e6fcc2f902d98428c92f8e171d635f"
+}

@@ -1,0 +1,162 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT card_schedules.id,\n                      card_schedules.card_id,\n                      card_schedules.board_id,\n                      cards.title AS card_title,\n                      card_schedules.target_list_id,\n                      board_lists.name AS \"target_list_name?\",\n                      card_schedules.time_zone,\n                      to_char(card_schedules.local_start, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS \"local_start_text!\",\n                      card_schedules.repeat_rule AS \"repeat_rule: Json<RepeatRule>\",\n                      card_schedules.block_minutes,\n                      card_schedules.block_category_id,\n                      card_schedules.paused,\n                      (extract(epoch FROM card_schedules.next_run_at) * 1000)::bigint AS next_run_at_millis\n               FROM card_schedules\n               JOIN cards ON cards.id = card_schedules.card_id\n               JOIN board_lists ON board_lists.id = card_schedules.target_list_id\n               WHERE card_schedules.user_id = $1\n                 AND NOT card_schedules.paused\n                 AND card_schedules.next_run_at IS NOT NULL\n               ORDER BY card_schedules.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "card_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "card_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "board_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "board_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "card_title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "target_list_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "target_list_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "target_list_name?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "board_lists",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "time_zone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "time_zone"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "local_start_text!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "repeat_rule: Json<RepeatRule>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "repeat_rule"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "block_minutes",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "block_minutes"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "block_category_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "block_category_id"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "paused",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "card_schedules",
+            "name": "paused"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "next_run_at_millis",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null,
+      true,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "024d9aff61606c4a689b0c73662380d7bef8b212986d2eab4efec21d93cef6c4"
+}

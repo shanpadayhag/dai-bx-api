@@ -6,6 +6,7 @@ pub mod http_client;
 pub mod json_field;
 pub mod mail_transport;
 pub mod middlewares;
+pub mod recurrence;
 pub mod request_context;
 pub mod security;
 pub mod state;

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM calendar_events\n             WHERE schedule_id = ANY($1::uuid[])\n               AND starts_at > 'epoch'::timestamptz + $2::bigint * interval '1 millisecond'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f437d5df356f5e704eb48f0c73800fd725a0d1cbbd94f897f19e664e87b22b36"
+}

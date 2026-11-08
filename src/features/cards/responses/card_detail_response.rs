@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use crate::features::boards::responses::board_response::BoardCardResponse;
+use crate::features::card_schedules::responses::card_schedule_response::CardScheduleResponse;
 use crate::features::cards::entities::card::{CardDetail, LinkedTask};
 
 #[derive(Debug, Serialize)]
@@ -20,6 +21,7 @@ pub struct CardDetailResponse {
     pub notes: String,
     pub linked_tasks: Vec<LinkedTaskResponse>,
     pub tracked_event_count: i64,
+    pub schedules: Vec<CardScheduleResponse>,
 }
 
 impl From<LinkedTask> for LinkedTaskResponse {
@@ -45,6 +47,11 @@ impl From<CardDetail> for CardDetailResponse {
                 .map(LinkedTaskResponse::from)
                 .collect(),
             tracked_event_count: card_detail.tracked_event_count,
+            schedules: card_detail
+                .schedules
+                .into_iter()
+                .map(CardScheduleResponse::from)
+                .collect(),
         }
     }
 }

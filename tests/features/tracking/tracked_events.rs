@@ -35,8 +35,8 @@ async fn a_running_event_changes_its_category_but_not_its_name_or_times(db_pool:
     assert_eq!(recategorized_event["endsAt"], serde_json::Value::Null);
     for refused_change in [
         json!({ "title": "Something else" }),
-        json!({ "startsAt": "2025-11-05T09:00:00Z" }),
-        json!({ "endsAt": "2025-11-05T10:00:00Z" }),
+        json!({ "start": "2025-11-05T09:00", "inputZone": "UTC" }),
+        json!({ "end": "2025-11-05T10:00", "inputZone": "UTC" }),
     ] {
         let response = patch_json_with_cookies(
             build_test_app(db_pool.clone()),

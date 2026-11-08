@@ -5,15 +5,18 @@ use sqlx::PgConnection;
 use crate::features::boards::data_sources::postgres::board_source::PostgresBoardSource;
 use crate::features::boards::entities::board::{Board, BoardSummary};
 use crate::features::boards::error::BoardError;
+use crate::features::card_schedules::actions::list_next_moves::ListNextMoves;
 
 #[derive(Default)]
 pub struct BuildBoard {
+    list_next_moves: ListNextMoves,
     postgres_board_source: PostgresBoardSource,
 }
 
 impl BuildBoard {
     pub fn new() -> Self {
         Self {
+            list_next_moves: ListNextMoves::new(),
             postgres_board_source: PostgresBoardSource,
         }
     }
@@ -44,6 +47,10 @@ impl BuildBoard {
             .postgres_board_source
             .list_property_options(&mut *connection, board_id)
             .await?;
+        let mut next_moves = self
+            .list_next_moves
+            .execute(&mut *connection, board_id)
+            .await?;
 
         let mut values_by_card = HashMap::with_capacity(cards.len());
         for (card_id, card_value) in card_values {
@@ -54,6 +61,7 @@ impl BuildBoard {
         }
         for card in &mut cards {
             card.values = values_by_card.remove(&card.id).unwrap_or_default();
+            card.next_move = next_moves.remove(&card.id);
         }
         let mut options_by_property = HashMap::with_capacity(properties.len());
         for (property_id, property_option) in property_options {
@@ -255,6 +263,7 @@ mod tests {
                     values: Vec::new(),
                     linked_task_count: 0,
                     done_linked_task_count: 0,
+                    next_move: None,
                 },
                 BoardCard {
                     id: seeded_board.second_card_id,
@@ -279,6 +288,7 @@ mod tests {
                     ],
                     linked_task_count: 3,
                     done_linked_task_count: 1,
+                    next_move: None,
                 },
             ]
         );

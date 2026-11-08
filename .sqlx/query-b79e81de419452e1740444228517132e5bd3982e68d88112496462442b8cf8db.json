@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT schedule_id,\n                      (extract(epoch FROM until_instant) * 1000)::bigint AS until_millis,\n                      hidden,\n                      to_char(local_start, 'YYYY-MM-DD\"T\"HH24:MI') AS \"local_start_text!\"\n               FROM event_series WHERE user_id = $1 ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "schedule_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "schedule_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "until_millis",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "hidden",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "hidden"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "local_start_text!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "b79e81de419452e1740444228517132e5bd3982e68d88112496462442b8cf8db"
+}

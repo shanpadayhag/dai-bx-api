@@ -1,5 +1,6 @@
 use crate::core::error::AppError;
 use crate::features::calendar_events::error::CalendarEventError;
+use crate::features::card_schedules::error::ScheduleError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BoardError {
@@ -30,6 +31,16 @@ impl From<CalendarEventError> for BoardError {
                 BoardError::Invalid(String::from("this is already running"))
             }
             CalendarEventError::Database(database_error) => BoardError::Database(database_error),
+        }
+    }
+}
+
+impl From<ScheduleError> for BoardError {
+    fn from(schedule_error: ScheduleError) -> Self {
+        match schedule_error {
+            ScheduleError::Invalid(invalid_message) => BoardError::Invalid(invalid_message),
+            ScheduleError::NotFound => BoardError::NotFound,
+            ScheduleError::Database(database_error) => BoardError::Database(database_error),
         }
     }
 }

@@ -52,8 +52,8 @@ async fn refuses_a_check_in_on_an_event_that_is_not_running(db_pool: PgPool) {
         &db_pool,
         &signed_in_person,
         "Gym",
-        "2026-11-05T09:00:00Z",
-        "2026-11-05T10:00:00Z",
+        "2026-11-05T09:00",
+        "2026-11-05T10:00",
     )
     .await;
 
