@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE cards\n             SET list_id = NULL,\n                 position = NULL,\n                 archived_at = 'epoch'::timestamptz + $3::bigint * interval '1 millisecond',\n                 archived_how = $4,\n                 archived_from_list_id = $2,\n                 archived_from_list_name = (SELECT name FROM board_lists WHERE id = $2),\n                 updated_at = now()\n             WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "659a0fbe87718733d80f32eaa2f38ff31ad3a400012fc0d73b53d536c4ce8edb"
+}

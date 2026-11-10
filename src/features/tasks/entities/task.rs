@@ -29,8 +29,16 @@ pub struct Task {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrackableTask {
     pub name: String,
+    pub card_id: Option<Uuid>,
     pub is_top_level: bool,
     pub is_done: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompletedLinkedTask {
+    pub task_id: Uuid,
+    pub card_id: Uuid,
+    pub name: String,
 }
 
 impl TrackableTask {

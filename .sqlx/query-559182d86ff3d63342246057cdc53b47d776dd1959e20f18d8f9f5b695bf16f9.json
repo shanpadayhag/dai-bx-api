@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cards.id AS card_id, cards.user_id\n             FROM cards\n             JOIN board_lists ON board_lists.id = cards.list_id\n             WHERE board_lists.archive_after IS NOT NULL\n               AND (cards.last_moved_at AT TIME ZONE 'UTC' + board_lists.archive_after)\n                       AT TIME ZONE 'UTC'\n                   <= 'epoch'::timestamptz + $1::bigint * interval '1 millisecond'\n               AND NOT EXISTS (\n                   SELECT 1\n                   FROM calendar_events\n                   WHERE calendar_events.card_id = cards.id\n                     AND calendar_events.kind = 'tracked'\n                     AND calendar_events.ends_at IS NULL\n               )\n             ORDER BY cards.last_moved_at, cards.id\n             LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "card_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "user_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "559182d86ff3d63342246057cdc53b47d776dd1959e20f18d8f9f5b695bf16f9"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH moved_card AS (\n                 UPDATE cards\n                 SET last_moved_at = 'epoch'::timestamptz + $5::bigint * interval '1 millisecond'\n                 WHERE id = $2\n                 RETURNING id, user_id\n             )\n             INSERT INTO card_moves\n                 (id, user_id, card_id, moved_at, from_list_name, to_list_name, reason, task_title)\n             SELECT $1,\n                    moved_card.user_id,\n                    moved_card.id,\n                    'epoch'::timestamptz + $5::bigint * interval '1 millisecond',\n                    (SELECT name FROM board_lists WHERE id = $3),\n                    (SELECT name FROM board_lists WHERE id = $4),\n                    $6,\n                    $7\n             FROM moved_card",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0f54165d19773a90a71c1d46f4ac35e8bee65ca9004f1e861e9a9117cd5f8ebb"
+}

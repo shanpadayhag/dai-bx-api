@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH chosen_triggers (kind, list_id) AS (\n                 VALUES ('started', $3::uuid), ('finished', $4::uuid)\n             ),\n             cleared_triggers AS (\n                 DELETE FROM card_triggers\n                 USING chosen_triggers\n                 WHERE card_triggers.card_id = $2\n                   AND card_triggers.kind = chosen_triggers.kind\n                   AND chosen_triggers.list_id IS NULL\n             )\n             INSERT INTO card_triggers (card_id, kind, user_id, board_id, list_id)\n             SELECT cards.id, chosen_triggers.kind, cards.user_id, cards.board_id,\n                    chosen_triggers.list_id\n             FROM cards\n             CROSS JOIN chosen_triggers\n             WHERE cards.id = $2 AND cards.board_id = $1 AND chosen_triggers.list_id IS NOT NULL\n             ON CONFLICT (card_id, kind)\n             DO UPDATE SET list_id = excluded.list_id, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a245ac612e89b65128de99b771e54c6fd5f202bbdf8cabe4b13a72305904f0a9"
+}

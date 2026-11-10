@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, position FROM board_lists WHERE board_id = $1 ORDER BY position",
+  "query": "SELECT id,\n                      name,\n                      position,\n                      (date_part('year', archive_after) * 12\n                          + date_part('month', archive_after))::integer AS archive_after_months,\n                      date_part('day', archive_after)::integer AS archive_after_days\n               FROM board_lists\n               WHERE board_id = $1\n               ORDER BY position",
   "describe": {
     "columns": [
       {
@@ -35,6 +35,18 @@
             "name": "position"
           }
         }
+      },
+      {
+        "ordinal": 3,
+        "name": "archive_after_months",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "archive_after_days",
+        "type_info": "Int4",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -45,8 +57,10 @@
     "nullable": [
       false,
       false,
-      false
+      false,
+      null,
+      null
     ]
   },
-  "hash": "d0e339f97f6027e4b78f66d28a0488005a0259d5eab33ed810c646e9ea0d05f5"
+  "hash": "f55c6b92ea32c5481c91807630bb0b6b7ea2cad324eb1131491c0560d87bec2c"
 }

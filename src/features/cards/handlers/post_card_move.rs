@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::core::error::AppError;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::responses::board_response::BoardResponse;
 use crate::features::cards::actions::move_card::MoveCard;
 use crate::features::cards::entities::card::{CardPlace, validate_card_position};
@@ -33,7 +34,12 @@ pub async fn post_card_move(
         position: validate_card_position(move_request.position)?,
     };
     let board = MoveCard::new(&app_state.db_pool)
-        .execute(write_session.user_id, card_id, requested_place)
+        .execute(
+            write_session.user_id,
+            card_id,
+            requested_place,
+            UtcInstant::now(),
+        )
         .await?;
     Ok(Json(board.into()))
 }

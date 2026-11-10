@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id,\n                      list_id,\n                      position,\n                      title,\n                      notes,\n                      to_char(due_date, 'YYYY-MM-DD') AS due_date,\n                      to_char(due_time, 'HH24:MI') AS due_time,\n                      (SELECT count(*)\n                       FROM calendar_events\n                       WHERE calendar_events.card_id = cards.id) AS \"tracked_event_count!\"\n               FROM cards\n               WHERE id = $1 AND user_id = $2",
+  "query": "SELECT id,\n                      list_id,\n                      position,\n                      title,\n                      notes,\n                      (extract(epoch FROM archived_at) * 1000)::bigint AS archived_at_millis,\n                      archived_how,\n                      to_char(due_date, 'YYYY-MM-DD') AS due_date,\n                      to_char(due_time, 'HH24:MI') AS due_time,\n                      (SELECT count(*)\n                       FROM calendar_events\n                       WHERE calendar_events.card_id = cards.id) AS \"tracked_event_count!\"\n               FROM cards\n               WHERE id = $1 AND user_id = $2",
   "describe": {
     "columns": [
       {
@@ -60,18 +60,35 @@
       },
       {
         "ordinal": 5,
+        "name": "archived_at_millis",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "archived_how",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "archived_how"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
         "name": "due_date",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
-        "ordinal": 6,
+        "ordinal": 8,
         "name": "due_time",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
-        "ordinal": 7,
+        "ordinal": 9,
         "name": "tracked_event_count!",
         "type_info": "Int8",
         "origin": "Expression"
@@ -85,14 +102,16 @@
     },
     "nullable": [
       false,
+      true,
+      true,
       false,
       false,
-      false,
-      false,
+      null,
+      true,
       null,
       null,
       null
     ]
   },
-  "hash": "4cb194e3e5495af5423ca86c975e43e36531dcfd53e0302d628abc8bd46ecc9c"
+  "hash": "35a60c72c0224afccf39cea902da3958008f1e5a5d8e626698575283dcad96bb"
 }

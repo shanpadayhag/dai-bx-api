@@ -4,6 +4,7 @@ use uuid::Uuid;
 use crate::features::card_schedules::actions::list_card_schedules::ListCardSchedules;
 use crate::features::card_schedules::entities::card_schedule::next_move_of;
 use crate::features::cards::data_sources::postgres::card_source::PostgresCardSource;
+use crate::features::cards::data_sources::postgres::card_trigger_source::PostgresCardTriggerSource;
 use crate::features::cards::entities::card::CardDetail;
 use crate::features::cards::error::CardError;
 
@@ -11,6 +12,7 @@ pub struct FindCardDetail<'a> {
     db_pool: &'a PgPool,
     list_card_schedules: ListCardSchedules,
     postgres_card_source: PostgresCardSource,
+    postgres_card_trigger_source: PostgresCardTriggerSource,
 }
 
 impl<'a> FindCardDetail<'a> {
@@ -19,6 +21,7 @@ impl<'a> FindCardDetail<'a> {
             db_pool,
             list_card_schedules: ListCardSchedules::new(),
             postgres_card_source: PostgresCardSource,
+            postgres_card_trigger_source: PostgresCardTriggerSource,
         }
     }
 
@@ -48,12 +51,18 @@ impl<'a> FindCardDetail<'a> {
             .execute(&mut card_connection, card_id)
             .await?;
         card.next_move = next_move_of(&schedules);
+        let triggers = self
+            .postgres_card_trigger_source
+            .list_for_card(&mut *card_connection, card_id)
+            .await?;
         Ok(CardDetail {
             card,
             notes: card_with_notes.notes,
             linked_tasks,
             tracked_event_count: card_with_notes.tracked_event_count,
             schedules,
+            triggers,
+            archive: card_with_notes.archive,
         })
     }
 }

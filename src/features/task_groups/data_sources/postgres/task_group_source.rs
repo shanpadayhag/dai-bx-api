@@ -136,6 +136,7 @@ pub mod tests {
     use sqlx::PgPool;
 
     use super::*;
+    use crate::core::utc_instant::UtcInstant;
     use crate::features::tasks::actions::add_task::AddTask;
     use crate::features::tasks::actions::complete_task::CompleteTask;
     use crate::features::users::actions::create_user::CreateUser;
@@ -193,7 +194,7 @@ pub mod tests {
     async fn mark_done(db_pool: &PgPool, user_id: Uuid, task_ids: &[Uuid]) {
         for task_id in task_ids {
             CompleteTask::new(db_pool)
-                .execute(user_id, *task_id)
+                .execute(user_id, *task_id, UtcInstant::now())
                 .await
                 .expect("the task should be completed");
         }

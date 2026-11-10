@@ -34,6 +34,7 @@ impl<'a> FinishRunningItem<'a> {
         event_id: Uuid,
         requested_ends_at: UtcInstant,
         marks_done: bool,
+        now: UtcInstant,
     ) -> Result<FinishedItem, TrackingError> {
         let mut finish_transaction = self.db_pool.begin().await?;
         let marked_task_id = if marks_done {
@@ -63,7 +64,7 @@ impl<'a> FinishRunningItem<'a> {
         let group_tasks = match marked_task_id {
             Some(task_id) => Some(
                 self.complete_task_in_transaction
-                    .execute(&mut finish_transaction, user_id, task_id)
+                    .execute(&mut finish_transaction, user_id, task_id, now)
                     .await?,
             ),
             None => None,
@@ -89,7 +90,7 @@ mod tests {
         let owner_id = seed_user_id(&db_pool, "owner@example.com").await;
         let (task_id, subtask_id) = seed_task_and_subtask(&db_pool, owner_id).await;
         let running_item = StartTask::new(&db_pool)
-            .execute(owner_id, task_id)
+            .execute(owner_id, task_id, UtcInstant::now())
             .await
             .expect("the task should start");
 
@@ -99,6 +100,7 @@ mod tests {
                 running_item.event.id,
                 UtcInstant::now().plus_minutes(1),
                 true,
+                UtcInstant::now(),
             )
             .await
             .expect("the item should finish");
@@ -122,12 +124,18 @@ mod tests {
         let owner_id = seed_user_id(&db_pool, "owner@example.com").await;
         let (task_id, _) = seed_task_and_subtask(&db_pool, owner_id).await;
         let running_item = StartTask::new(&db_pool)
-            .execute(owner_id, task_id)
+            .execute(owner_id, task_id, UtcInstant::now())
             .await
             .expect("the task should start");
 
         let finished_item = FinishRunningItem::new(&db_pool)
-            .execute(owner_id, running_item.event.id, UtcInstant::now(), false)
+            .execute(
+                owner_id,
+                running_item.event.id,
+                UtcInstant::now(),
+                false,
+                UtcInstant::now(),
+            )
             .await
             .expect("the item should finish");
 

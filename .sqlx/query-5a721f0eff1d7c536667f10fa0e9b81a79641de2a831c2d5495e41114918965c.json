@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cards.id,\n                      cards.title,\n                      cards.archived_from_list_name,\n                      (extract(epoch FROM cards.archived_at) * 1000)::bigint AS \"archived_at_millis!\",\n                      cards.archived_how AS \"archived_how!\"\n               FROM cards\n               WHERE cards.board_id = $1\n                 AND cards.archived_at IS NOT NULL\n                 AND ($2::uuid IS NULL\n                      OR (cards.archived_at, cards.id) < (\n                          SELECT before_cards.archived_at, before_cards.id\n                          FROM cards AS before_cards\n                          WHERE before_cards.id = $2 AND before_cards.board_id = $1\n                      ))\n               ORDER BY cards.archived_at DESC, cards.id DESC\n               LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "archived_from_list_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "archived_from_list_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "archived_at_millis!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "archived_how!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "archived_how"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null,
+      true
+    ]
+  },
+  "hash": "5a721f0eff1d7c536667f10fa0e9b81a79641de2a831c2d5495e41114918965c"
+}

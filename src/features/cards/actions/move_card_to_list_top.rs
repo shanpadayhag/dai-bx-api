@@ -1,19 +1,23 @@
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use crate::features::cards::data_sources::postgres::card_move_source::PostgresCardMoveSource;
 use crate::features::cards::data_sources::postgres::card_source::PostgresCardSource;
 use crate::features::cards::entities::card::CardPlace;
+use crate::features::cards::entities::card_move::{MoveCause, NewCardMove};
 use crate::features::cards::error::CardError;
 
 #[derive(Default)]
 pub struct MoveCardToListTop {
     postgres_card_source: PostgresCardSource,
+    postgres_card_move_source: PostgresCardMoveSource,
 }
 
 impl MoveCardToListTop {
     pub fn new() -> Self {
         Self {
             postgres_card_source: PostgresCardSource,
+            postgres_card_move_source: PostgresCardMoveSource,
         }
     }
 
@@ -23,12 +27,15 @@ impl MoveCardToListTop {
         board_id: Uuid,
         card_id: Uuid,
         target_list_id: Uuid,
+        move_cause: &MoveCause,
     ) -> Result<bool, CardError> {
-        let current_place = self
+        let Some(current_place) = self
             .postgres_card_source
             .find_place(&mut *connection, board_id, card_id)
             .await?
-            .ok_or(CardError::NotFound)?;
+        else {
+            return Ok(false);
+        };
         if current_place.list_id == target_list_id {
             return Ok(false);
         }
@@ -47,6 +54,17 @@ impl MoveCardToListTop {
                 },
             )
             .await?;
+        self.postgres_card_move_source
+            .record(
+                &mut *connection,
+                &NewCardMove {
+                    card_id,
+                    from_list_id: Some(current_place.list_id),
+                    to_list_id: Some(target_list_id),
+                    cause: move_cause,
+                },
+            )
+            .await?;
         Ok(true)
     }
 }
@@ -56,9 +74,11 @@ mod tests {
     use sqlx::PgPool;
 
     use super::*;
+    use crate::core::utc_instant::UtcInstant;
     use crate::features::cards::data_sources::postgres::card_source::tests::{
         seed_board_with_lists, seed_card, seed_user_id,
     };
+    use crate::features::cards::entities::card_move::CardMoveReason;
 
     async fn place_of(db_pool: &PgPool, board_id: Uuid, card_id: Uuid) -> CardPlace {
         PostgresCardSource
@@ -85,6 +105,7 @@ mod tests {
                 board_id,
                 moving_card_id,
                 to_do_list_id,
+                &MoveCause::without_task(CardMoveReason::Schedule, UtcInstant::now()),
             )
             .await
             .expect("the move should run");
@@ -94,6 +115,7 @@ mod tests {
                 board_id,
                 moving_card_id,
                 to_do_list_id,
+                &MoveCause::without_task(CardMoveReason::Schedule, UtcInstant::now()),
             )
             .await
             .expect("the move should run");

@@ -1,5 +1,7 @@
 use uuid::Uuid;
 
+use crate::core::idle_length::IdleLength;
+
 use crate::features::board_lists::error::BoardListError;
 
 pub const LIST_NAME_MAX_CHARACTERS: usize = 100;
@@ -94,4 +96,10 @@ mod tests {
             i32::MAX
         );
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListChanges {
+    pub name: Option<String>,
+    pub archive_after_change: Option<Option<IdleLength>>,
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE cards\n             SET list_id = $2,\n                 position = CASE WHEN id = $1 THEN 0 ELSE position + 1 END,\n                 archived_at = CASE WHEN id = $1 THEN NULL ELSE archived_at END,\n                 archived_how = CASE WHEN id = $1 THEN NULL ELSE archived_how END,\n                 archived_from_list_id = CASE WHEN id = $1 THEN NULL ELSE archived_from_list_id END,\n                 archived_from_list_name =\n                     CASE WHEN id = $1 THEN NULL ELSE archived_from_list_name END,\n                 updated_at = CASE WHEN id = $1 THEN now() ELSE updated_at END\n             WHERE id = $1 OR list_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c98e15dbd65e3003168bb3c78b986fa148c7d2a4376ee55cd2509b66223915ee"
+}

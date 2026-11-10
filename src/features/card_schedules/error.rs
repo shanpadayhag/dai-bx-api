@@ -16,6 +16,7 @@ impl From<CardError> for ScheduleError {
         match card_error {
             CardError::Invalid(invalid_message) => ScheduleError::Invalid(invalid_message),
             CardError::NotFound => ScheduleError::NotFound,
+            CardError::Conflict(conflict_message) => ScheduleError::Invalid(conflict_message),
             CardError::Database(database_error) => ScheduleError::Database(database_error),
         }
     }

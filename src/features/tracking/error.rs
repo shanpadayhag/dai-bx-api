@@ -31,6 +31,7 @@ impl From<CardError> for TrackingError {
         match card_error {
             CardError::Invalid(invalid_message) => TrackingError::Invalid(invalid_message),
             CardError::NotFound => TrackingError::NotFound,
+            CardError::Conflict(conflict_message) => TrackingError::Invalid(conflict_message),
             CardError::Database(database_error) => TrackingError::Database(database_error),
         }
     }

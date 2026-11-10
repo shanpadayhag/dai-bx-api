@@ -1,6 +1,10 @@
+pub mod archive;
 pub mod create;
 mod delete;
+pub mod history;
+mod idle_archive;
 mod moving;
 mod read;
+pub mod triggers;
 mod update;
 mod values;

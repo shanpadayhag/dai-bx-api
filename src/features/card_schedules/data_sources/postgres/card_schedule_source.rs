@@ -166,6 +166,7 @@ impl PostgresCardScheduleSource {
         sqlx::query!(
             "UPDATE card_schedules
              SET paused = $2,
+                 paused_by_archive = paused_by_archive AND $2,
                  next_run_at = 'epoch'::timestamptz + $3::bigint * interval '1 millisecond',
                  updated_at = now()
              WHERE id = $1",
@@ -368,6 +369,35 @@ impl PostgresCardScheduleSource {
              WHERE target_list_id = $1 AND NOT paused
              RETURNING id",
             list_id,
+        )
+        .fetch_all(executor)
+        .await
+    }
+
+    pub async fn pause_for_archive(
+        &self,
+        executor: impl PgExecutor<'_>,
+        card_id: Uuid,
+    ) -> Result<Vec<Uuid>, sqlx::Error> {
+        sqlx::query_scalar!(
+            "UPDATE card_schedules
+             SET paused = true, paused_by_archive = true, updated_at = now()
+             WHERE card_id = $1 AND NOT paused
+             RETURNING id",
+            card_id,
+        )
+        .fetch_all(executor)
+        .await
+    }
+
+    pub async fn list_ids_paused_by_archive(
+        &self,
+        executor: impl PgExecutor<'_>,
+        card_id: Uuid,
+    ) -> Result<Vec<Uuid>, sqlx::Error> {
+        sqlx::query_scalar!(
+            "SELECT id FROM card_schedules WHERE card_id = $1 AND paused_by_archive ORDER BY id",
+            card_id,
         )
         .fetch_all(executor)
         .await

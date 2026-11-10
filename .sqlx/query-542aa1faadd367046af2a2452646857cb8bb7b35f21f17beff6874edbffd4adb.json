@@ -1,0 +1,85 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id,\n                      (extract(epoch FROM moved_at) * 1000)::bigint AS \"moved_at_millis!\",\n                      from_list_name,\n                      to_list_name,\n                      reason,\n                      task_title\n               FROM card_moves\n               WHERE card_id = $1 AND ($2::uuid IS NULL OR id < $2)\n               ORDER BY id DESC\n               LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_moves",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "moved_at_millis!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "from_list_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "card_moves",
+            "name": "from_list_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "to_list_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "card_moves",
+            "name": "to_list_name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "reason",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "card_moves",
+            "name": "reason"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "task_title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "card_moves",
+            "name": "task_title"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "542aa1faadd367046af2a2452646857cb8bb7b35f21f17beff6874edbffd4adb"
+}

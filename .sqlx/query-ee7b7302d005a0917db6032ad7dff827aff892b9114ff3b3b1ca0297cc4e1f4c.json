@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT name,\n                      parent_id IS NULL AS \"is_top_level!\",\n                      completed_at IS NOT NULL AS \"is_done!\"\n               FROM tasks\n               WHERE id = $1 AND user_id = $2",
+  "query": "SELECT name,\n                      card_id,\n                      parent_id IS NULL AS \"is_top_level!\",\n                      completed_at IS NOT NULL AS \"is_done!\"\n               FROM tasks\n               WHERE id = $1 AND user_id = $2",
   "describe": {
     "columns": [
       {
@@ -16,12 +16,23 @@
       },
       {
         "ordinal": 1,
+        "name": "card_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tasks",
+            "name": "card_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
         "name": "is_top_level!",
         "type_info": "Bool",
         "origin": "Expression"
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "is_done!",
         "type_info": "Bool",
         "origin": "Expression"
@@ -35,9 +46,10 @@
     },
     "nullable": [
       false,
+      true,
       null,
       null
     ]
   },
-  "hash": "df956616d0fee025a77da6616608dcd82cc3f402935c616413487c914bc8adef"
+  "hash": "ee7b7302d005a0917db6032ad7dff827aff892b9114ff3b3b1ca0297cc4e1f4c"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT cards.id,\n                      cards.list_id,\n                      cards.position,\n                      cards.title,\n                      to_char(cards.due_date, 'YYYY-MM-DD') AS due_date,\n                      to_char(cards.due_time, 'HH24:MI') AS due_time,\n                      coalesce(card_task_counts.linked_task_count, 0) AS \"linked_task_count!\",\n                      coalesce(card_task_counts.done_linked_task_count, 0) AS \"done_linked_task_count!\"\n               FROM cards\n               LEFT JOIN (\n                   SELECT tasks.card_id,\n                          count(*) AS linked_task_count,\n                          count(*) FILTER (WHERE tasks.completed_at IS NOT NULL) AS done_linked_task_count\n                   FROM tasks\n                   JOIN cards AS linked_cards ON linked_cards.id = tasks.card_id\n                   WHERE linked_cards.board_id = $1\n                   GROUP BY tasks.card_id\n               ) AS card_task_counts ON card_task_counts.card_id = cards.id\n               WHERE cards.board_id = $1\n               ORDER BY cards.list_id, cards.position",
+  "query": "SELECT cards.id,\n                      cards.list_id AS \"list_id!\",\n                      cards.position AS \"position!\",\n                      cards.title,\n                      to_char(cards.due_date, 'YYYY-MM-DD') AS due_date,\n                      to_char(cards.due_time, 'HH24:MI') AS due_time,\n                      coalesce(card_task_counts.linked_task_count, 0) AS \"linked_task_count!\",\n                      coalesce(card_task_counts.done_linked_task_count, 0) AS \"done_linked_task_count!\"\n               FROM cards\n               LEFT JOIN (\n                   SELECT tasks.card_id,\n                          count(*) AS linked_task_count,\n                          count(*) FILTER (WHERE tasks.completed_at IS NOT NULL) AS done_linked_task_count\n                   FROM tasks\n                   JOIN cards AS linked_cards ON linked_cards.id = tasks.card_id\n                   WHERE linked_cards.board_id = $1\n                   GROUP BY tasks.card_id\n               ) AS card_task_counts ON card_task_counts.card_id = cards.id\n               WHERE cards.board_id = $1 AND cards.archived_at IS NULL\n               ORDER BY cards.list_id, cards.position",
   "describe": {
     "columns": [
       {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "list_id",
+        "name": "list_id!",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "position",
+        "name": "position!",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -79,8 +79,8 @@
     },
     "nullable": [
       false,
-      false,
-      false,
+      true,
+      true,
       false,
       null,
       null,
@@ -88,5 +88,5 @@
       null
     ]
   },
-  "hash": "ca4e6ead460f5b680e239540588646e0ffb207c638f36343681f4acb7652bfb6"
+  "hash": "5d89aff8501c0bf31824e084859f94f96913207f989188100c0bdb3480a2f5c2"
 }

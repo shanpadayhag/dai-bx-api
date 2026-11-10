@@ -10,6 +10,8 @@ pub enum CardError {
     Invalid(String),
     #[error("not found")]
     NotFound,
+    #[error("{0}")]
+    Conflict(String),
     #[error(transparent)]
     Database(#[from] sqlx::Error),
 }
@@ -39,6 +41,7 @@ impl From<CardError> for AppError {
         match card_error {
             CardError::Invalid(invalid_message) => AppError::Validation(invalid_message),
             CardError::NotFound => AppError::NotFound,
+            CardError::Conflict(conflict_message) => AppError::Conflict(conflict_message),
             CardError::Database(database_error) => AppError::Internal(database_error.into()),
         }
     }

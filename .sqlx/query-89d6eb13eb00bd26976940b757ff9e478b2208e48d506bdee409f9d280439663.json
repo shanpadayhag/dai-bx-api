@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT card_triggers.list_id AS \"list_id!\"\n               FROM card_triggers\n               JOIN cards ON cards.id = card_triggers.card_id\n               WHERE card_triggers.card_id = $1\n                 AND card_triggers.kind = $2\n                 AND card_triggers.list_id IS NOT NULL\n                 AND cards.archived_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "list_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_triggers",
+            "name": "list_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "89d6eb13eb00bd26976940b757ff9e478b2208e48d506bdee409f9d280439663"
+}

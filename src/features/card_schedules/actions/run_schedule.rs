@@ -9,6 +9,7 @@ use crate::features::card_schedules::entities::schedule_run::{
 };
 use crate::features::card_schedules::error::ScheduleError;
 use crate::features::cards::actions::move_card_to_list_top::MoveCardToListTop;
+use crate::features::cards::entities::card_move::{CardMoveReason, MoveCause};
 
 #[derive(Default)]
 pub struct RunSchedule {
@@ -57,6 +58,7 @@ impl RunSchedule {
                     card_schedule.board_id,
                     card_schedule.card_id,
                     target_list_id,
+                    &MoveCause::without_task(CardMoveReason::Schedule, run_request.now),
                 )
                 .await?;
             if is_moved {

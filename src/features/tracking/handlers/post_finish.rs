@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::core::error::AppError;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::entities::calendar_event::parse_event_instant;
 use crate::features::throttling::entities::write_session::WriteSession;
 use crate::features::tracking::actions::finish_running_item::FinishRunningItem;
@@ -34,6 +35,7 @@ pub async fn post_finish(
             event_id,
             requested_ends_at,
             finish_request.mark_done.unwrap_or(false),
+            UtcInstant::now(),
         )
         .await?;
     Ok(Json(finished_item.into()))

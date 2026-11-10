@@ -64,9 +64,11 @@ impl<'a> DeleteCard<'a> {
             .delete(&mut *delete_transaction, board_summary.id, card_id)
             .await?
             .ok_or(CardError::NotFound)?;
-        self.postgres_card_source
-            .close_position_gap(&mut *delete_transaction, removed_place)
-            .await?;
+        if let Some(removed_place) = removed_place {
+            self.postgres_card_source
+                .close_position_gap(&mut *delete_transaction, removed_place)
+                .await?;
+        }
         let board = self
             .build_board
             .execute(&mut delete_transaction, board_summary)

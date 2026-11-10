@@ -28,6 +28,8 @@ async fn reads_a_card_with_its_notes_and_linked_tasks(db_pool: PgPool) {
             "linkedTasks": [],
             "trackedEventCount": 0,
             "schedules": [],
+            "triggers": {"started": null, "finished": null},
+            "archived": null,
         })
     );
 }

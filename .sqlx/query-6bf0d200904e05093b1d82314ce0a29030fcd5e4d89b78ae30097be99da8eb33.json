@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE board_lists\n             SET archive_after = CASE WHEN $3::int IS NULL THEN NULL\n                                      ELSE make_interval(months => $3, days => $4) END,\n                 updated_at = now()\n             WHERE id = $2 AND board_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6bf0d200904e05093b1d82314ce0a29030fcd5e4d89b78ae30097be99da8eb33"
+}

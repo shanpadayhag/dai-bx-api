@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::core::idle_length::IdleLength;
+
 use crate::features::boards::entities::board::{
     Board, BoardCard, BoardList, BoardProperty, BoardPropertyKind, BoardSummary, CardValue,
     CardValueContent, PropertyOption,
@@ -12,10 +14,12 @@ pub struct BoardSummaryResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BoardListResponse {
     pub id: String,
     pub name: String,
     pub position: i32,
+    pub archive_after: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -38,8 +42,8 @@ pub struct CardValueResponse {
 #[serde(rename_all = "camelCase")]
 pub struct BoardCardResponse {
     pub id: String,
-    pub list_id: String,
-    pub position: i32,
+    pub list_id: Option<String>,
+    pub position: Option<i32>,
     pub title: String,
     pub due_date: Option<String>,
     pub due_time: Option<String>,
@@ -96,6 +100,7 @@ impl From<BoardList> for BoardListResponse {
             id: board_list.id.to_string(),
             name: board_list.name,
             position: board_list.position,
+            archive_after: board_list.archive_after.map(IdleLength::to_text),
         }
     }
 }
@@ -121,7 +126,7 @@ impl From<BoardCard> for BoardCardResponse {
     fn from(board_card: BoardCard) -> Self {
         Self {
             id: board_card.id.to_string(),
-            list_id: board_card.list_id.to_string(),
+            list_id: board_card.list_id.map(|list_id| list_id.to_string()),
             position: board_card.position,
             title: board_card.title,
             due_date: board_card.due_date,

@@ -1,5 +1,6 @@
 use uuid::Uuid;
 
+use crate::core::idle_length::IdleLength;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::error::BoardError;
 
@@ -23,13 +24,14 @@ pub struct BoardList {
     pub id: Uuid,
     pub name: String,
     pub position: i32,
+    pub archive_after: Option<IdleLength>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoardCard {
     pub id: Uuid,
-    pub list_id: Uuid,
-    pub position: i32,
+    pub list_id: Option<Uuid>,
+    pub position: Option<i32>,
     pub title: String,
     pub due_date: Option<String>,
     pub due_time: Option<String>,

@@ -1,12 +1,15 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::actions::open_running_event::OpenRunningEvent;
 use crate::features::calendar_events::entities::calendar_event::{
     NewRunningEvent, RunningItem, TrackedSubject,
 };
 use crate::features::cards::actions::find_card_title::FindCardTitle;
+use crate::features::cards::actions::fire_card_trigger::FireCardTrigger;
 use crate::features::cards::actions::lock_board_of_card::LockBoardOfCard;
+use crate::features::cards::entities::card_trigger::TriggerKind;
 use crate::features::tracking::error::TrackingError;
 
 pub struct StartCard<'a> {
@@ -14,6 +17,7 @@ pub struct StartCard<'a> {
     lock_board_of_card: LockBoardOfCard,
     find_card_title: FindCardTitle,
     open_running_event: OpenRunningEvent,
+    fire_card_trigger: FireCardTrigger,
 }
 
 impl<'a> StartCard<'a> {
@@ -23,6 +27,7 @@ impl<'a> StartCard<'a> {
             lock_board_of_card: LockBoardOfCard::new(),
             find_card_title: FindCardTitle::new(),
             open_running_event: OpenRunningEvent::new(),
+            fire_card_trigger: FireCardTrigger::new(),
         }
     }
 
@@ -30,6 +35,7 @@ impl<'a> StartCard<'a> {
         &self,
         user_id: Uuid,
         card_id: Uuid,
+        now: UtcInstant,
     ) -> Result<RunningItem, TrackingError> {
         let mut start_transaction = self.db_pool.begin().await?;
         self.lock_board_of_card
@@ -49,6 +55,16 @@ impl<'a> StartCard<'a> {
                     title: card_title,
                     subject: TrackedSubject::Card(card_id),
                 },
+            )
+            .await?;
+        self.fire_card_trigger
+            .execute(
+                &mut start_transaction,
+                user_id,
+                card_id,
+                TriggerKind::Started,
+                None,
+                now,
             )
             .await?;
         start_transaction.commit().await?;
@@ -89,11 +105,15 @@ mod tests {
         let start_card = StartCard::new(&db_pool);
 
         let running_item = start_card
-            .execute(owner_id, card_id)
+            .execute(owner_id, card_id, UtcInstant::now())
             .await
             .expect("the card should start");
-        let second_start = start_card.execute(owner_id, card_id).await;
-        let foreign_start = start_card.execute(other_person_id, card_id).await;
+        let second_start = start_card
+            .execute(owner_id, card_id, UtcInstant::now())
+            .await;
+        let foreign_start = start_card
+            .execute(other_person_id, card_id, UtcInstant::now())
+            .await;
 
         assert_eq!(running_item.event.title, "Plan");
         assert_eq!(running_item.estimate_minutes, None);

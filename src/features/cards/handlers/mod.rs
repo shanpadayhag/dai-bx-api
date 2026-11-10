@@ -1,7 +1,12 @@
 pub mod delete_card;
 pub mod delete_card_value;
+pub mod get_archived_cards;
 pub mod get_card;
+pub mod get_card_history;
 pub mod patch_card;
+pub mod post_card_archive;
 pub mod post_card_move;
+pub mod post_card_restore;
 pub mod post_list_cards;
+pub mod put_card_triggers;
 pub mod put_card_value;

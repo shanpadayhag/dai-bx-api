@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT card_triggers.kind AS \"kind!\",\n                      card_triggers.list_id,\n                      board_lists.name AS \"list_name?\"\n               FROM card_triggers\n               LEFT JOIN board_lists ON board_lists.id = card_triggers.list_id\n               WHERE card_triggers.card_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "card_triggers",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "list_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "card_triggers",
+            "name": "list_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "list_name?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "board_lists",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "dc9cda46daf54defa6915dbde1da43842d28462a926c3f2c54e8369b8b9fe3ee"
+}

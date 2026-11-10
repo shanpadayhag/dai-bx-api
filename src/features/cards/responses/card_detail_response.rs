@@ -3,6 +3,9 @@ use serde::Serialize;
 use crate::features::boards::responses::board_response::BoardCardResponse;
 use crate::features::card_schedules::responses::card_schedule_response::CardScheduleResponse;
 use crate::features::cards::entities::card::{CardDetail, LinkedTask};
+use crate::features::cards::responses::card_workflow_response::{
+    CardArchiveResponse, CardTriggersResponse,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,6 +25,8 @@ pub struct CardDetailResponse {
     pub linked_tasks: Vec<LinkedTaskResponse>,
     pub tracked_event_count: i64,
     pub schedules: Vec<CardScheduleResponse>,
+    pub triggers: CardTriggersResponse,
+    pub archived: Option<CardArchiveResponse>,
 }
 
 impl From<LinkedTask> for LinkedTaskResponse {
@@ -52,6 +57,8 @@ impl From<CardDetail> for CardDetailResponse {
                 .into_iter()
                 .map(CardScheduleResponse::from)
                 .collect(),
+            triggers: card_detail.triggers.into(),
+            archived: card_detail.archive.map(CardArchiveResponse::from),
         }
     }
 }

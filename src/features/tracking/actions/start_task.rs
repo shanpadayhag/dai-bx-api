@@ -1,10 +1,13 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::actions::open_running_event::OpenRunningEvent;
 use crate::features::calendar_events::entities::calendar_event::{
     NewRunningEvent, RunningItem, TrackedSubject,
 };
+use crate::features::cards::actions::fire_card_trigger::FireCardTrigger;
+use crate::features::cards::entities::card_trigger::TriggerKind;
 use crate::features::tasks::actions::find_trackable_task::FindTrackableTask;
 use crate::features::tasks::actions::lock_group_of_task::LockGroupOfTask;
 use crate::features::tracking::error::TrackingError;
@@ -14,6 +17,7 @@ pub struct StartTask<'a> {
     lock_group_of_task: LockGroupOfTask,
     find_trackable_task: FindTrackableTask,
     open_running_event: OpenRunningEvent,
+    fire_card_trigger: FireCardTrigger,
 }
 
 impl<'a> StartTask<'a> {
@@ -23,6 +27,7 @@ impl<'a> StartTask<'a> {
             lock_group_of_task: LockGroupOfTask::new(),
             find_trackable_task: FindTrackableTask::new(),
             open_running_event: OpenRunningEvent::new(),
+            fire_card_trigger: FireCardTrigger::new(),
         }
     }
 
@@ -30,6 +35,7 @@ impl<'a> StartTask<'a> {
         &self,
         user_id: Uuid,
         task_id: Uuid,
+        now: UtcInstant,
     ) -> Result<RunningItem, TrackingError> {
         let mut start_transaction = self.db_pool.begin().await?;
         self.lock_group_of_task
@@ -51,11 +57,23 @@ impl<'a> StartTask<'a> {
                 &NewRunningEvent {
                     id: Uuid::now_v7(),
                     user_id,
-                    title: trackable_task.name,
+                    title: trackable_task.name.clone(),
                     subject: TrackedSubject::Task(task_id),
                 },
             )
             .await?;
+        if let Some(card_id) = trackable_task.card_id {
+            self.fire_card_trigger
+                .execute(
+                    &mut start_transaction,
+                    user_id,
+                    card_id,
+                    TriggerKind::Started,
+                    Some(&trackable_task.name),
+                    now,
+                )
+                .await?;
+        }
         start_transaction.commit().await?;
         Ok(running_item)
     }
@@ -121,10 +139,12 @@ pub mod tests {
         let start_task = StartTask::new(&db_pool);
 
         let running_item = start_task
-            .execute(owner_id, task_id)
+            .execute(owner_id, task_id, UtcInstant::now())
             .await
             .expect("the task should start");
-        let second_start = start_task.execute(owner_id, task_id).await;
+        let second_start = start_task
+            .execute(owner_id, task_id, UtcInstant::now())
+            .await;
 
         assert_eq!(running_item.event.title, "Release");
         assert!(running_item.event.is_running());
@@ -138,8 +158,12 @@ pub mod tests {
         let (task_id, subtask_id) = seed_task_and_subtask(&db_pool, owner_id).await;
         let start_task = StartTask::new(&db_pool);
 
-        let subtask_start = start_task.execute(owner_id, subtask_id).await;
-        let foreign_start = start_task.execute(other_person_id, task_id).await;
+        let subtask_start = start_task
+            .execute(owner_id, subtask_id, UtcInstant::now())
+            .await;
+        let foreign_start = start_task
+            .execute(other_person_id, task_id, UtcInstant::now())
+            .await;
 
         assert!(matches!(subtask_start, Err(TrackingError::Invalid(_))));
         assert!(matches!(foreign_start, Err(TrackingError::NotFound)));

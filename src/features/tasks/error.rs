@@ -1,5 +1,6 @@
 use crate::core::error::AppError;
 use crate::features::calendar_events::error::CalendarEventError;
+use crate::features::cards::error::CardError;
 use crate::features::task_groups::error::TaskGroupError;
 use crate::features::tasks::entities::group_import::ImportProblem;
 
@@ -32,6 +33,18 @@ impl From<TaskError> for AppError {
             TaskError::InvalidAt { message, path } => AppError::ValidationAt { message, path },
             TaskError::NotFound => AppError::NotFound,
             TaskError::Database(database_error) => AppError::Internal(database_error.into()),
+        }
+    }
+}
+
+impl From<CardError> for TaskError {
+    fn from(card_error: CardError) -> Self {
+        match card_error {
+            CardError::Invalid(invalid_message) | CardError::Conflict(invalid_message) => {
+                TaskError::Invalid(invalid_message)
+            }
+            CardError::NotFound => TaskError::NotFound,
+            CardError::Database(database_error) => TaskError::Database(database_error),
         }
     }
 }

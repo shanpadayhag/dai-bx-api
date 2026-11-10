@@ -1,9 +1,13 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
+use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::entities::board::{BoardCard, CardValue, CardValueContent};
 use crate::features::cards::entities::card::{
     CardChanges, CardDue, CardPlace, CardWithNotes, LinkedTask, NewCard,
+};
+use crate::features::cards::entities::card_archive::{
+    ArchiveHow, ArchivedCard, CardArchive, IdleCard,
 };
 
 #[derive(Default)]
@@ -75,6 +79,8 @@ impl PostgresCardSource {
                       position,
                       title,
                       notes,
+                      (extract(epoch FROM archived_at) * 1000)::bigint AS archived_at_millis,
+                      archived_how,
                       to_char(due_date, 'YYYY-MM-DD') AS due_date,
                       to_char(due_time, 'HH24:MI') AS due_time,
                       (SELECT count(*)
@@ -102,6 +108,18 @@ impl PostgresCardSource {
             },
             notes: card_row.notes,
             tracked_event_count: card_row.tracked_event_count,
+            archive: card_row
+                .archived_at_millis
+                .zip(
+                    card_row
+                        .archived_how
+                        .as_deref()
+                        .and_then(ArchiveHow::from_stored),
+                )
+                .map(|(archived_at_millis, how)| CardArchive {
+                    archived_at: UtcInstant::from_unix_millis(archived_at_millis),
+                    how,
+                }),
         }))
     }
 
@@ -217,7 +235,9 @@ impl PostgresCardSource {
     ) -> Result<Option<CardPlace>, sqlx::Error> {
         sqlx::query_as!(
             CardPlace,
-            "SELECT list_id, position FROM cards WHERE id = $2 AND board_id = $1",
+            r#"SELECT list_id AS "list_id!", position AS "position!"
+               FROM cards
+               WHERE id = $2 AND board_id = $1 AND list_id IS NOT NULL"#,
             board_id,
             card_id,
         )
@@ -305,14 +325,253 @@ impl PostgresCardSource {
         executor: impl PgExecutor<'_>,
         board_id: Uuid,
         card_id: Uuid,
-    ) -> Result<Option<CardPlace>, sqlx::Error> {
-        sqlx::query_as!(
-            CardPlace,
+    ) -> Result<Option<Option<CardPlace>>, sqlx::Error> {
+        let deleted_row = sqlx::query!(
             "DELETE FROM cards WHERE id = $2 AND board_id = $1 RETURNING list_id, position",
             board_id,
             card_id,
         )
         .fetch_optional(executor)
+        .await?;
+        Ok(deleted_row.map(|deleted_row| {
+            deleted_row
+                .list_id
+                .zip(deleted_row.position)
+                .map(|(list_id, position)| CardPlace { list_id, position })
+        }))
+    }
+
+    pub async fn has_open_linked_tasks(
+        &self,
+        executor: impl PgExecutor<'_>,
+        card_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                   SELECT 1 FROM tasks WHERE card_id = $1 AND completed_at IS NULL
+               ) AS "has_open_linked_tasks!""#,
+            card_id,
+        )
+        .fetch_one(executor)
+        .await
+    }
+
+    pub async fn is_running(
+        &self,
+        executor: impl PgExecutor<'_>,
+        card_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                   SELECT 1
+                   FROM calendar_events
+                   WHERE card_id = $1 AND kind = 'tracked' AND ends_at IS NULL
+               ) AS "is_running!""#,
+            card_id,
+        )
+        .fetch_one(executor)
+        .await
+    }
+
+    pub async fn take_off_board(
+        &self,
+        executor: impl PgExecutor<'_>,
+        card_id: Uuid,
+        card_place: CardPlace,
+        card_archive: CardArchive,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            "UPDATE cards
+             SET list_id = NULL,
+                 position = NULL,
+                 archived_at = 'epoch'::timestamptz + $3::bigint * interval '1 millisecond',
+                 archived_how = $4,
+                 archived_from_list_id = $2,
+                 archived_from_list_name = (SELECT name FROM board_lists WHERE id = $2),
+                 updated_at = now()
+             WHERE id = $1",
+            card_id,
+            card_place.list_id,
+            card_archive.archived_at.unix_millis(),
+            card_archive.how.as_str(),
+        )
+        .execute(executor)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn find_archived_from(
+        &self,
+        executor: impl PgExecutor<'_>,
+        board_id: Uuid,
+        card_id: Uuid,
+    ) -> Result<Option<Option<Uuid>>, sqlx::Error> {
+        sqlx::query_scalar!(
+            "SELECT archived_from_list_id
+             FROM cards
+             WHERE id = $2 AND board_id = $1 AND archived_at IS NOT NULL",
+            board_id,
+            card_id,
+        )
+        .fetch_optional(executor)
+        .await
+    }
+
+    pub async fn find_first_list_id(
+        &self,
+        executor: impl PgExecutor<'_>,
+        board_id: Uuid,
+    ) -> Result<Option<Uuid>, sqlx::Error> {
+        sqlx::query_scalar!(
+            "SELECT id FROM board_lists WHERE board_id = $1 ORDER BY position LIMIT 1",
+            board_id,
+        )
+        .fetch_optional(executor)
+        .await
+    }
+
+    pub async fn is_board_owned(
+        &self,
+        executor: impl PgExecutor<'_>,
+        user_id: Uuid,
+        board_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                   SELECT 1 FROM boards WHERE id = $1 AND user_id = $2
+               ) AS "is_board_owned!""#,
+            board_id,
+            user_id,
+        )
+        .fetch_one(executor)
+        .await
+    }
+
+    pub async fn put_back_on_top(
+        &self,
+        executor: impl PgExecutor<'_>,
+        card_id: Uuid,
+        list_id: Uuid,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            "UPDATE cards
+             SET list_id = $2,
+                 position = CASE WHEN id = $1 THEN 0 ELSE position + 1 END,
+                 archived_at = CASE WHEN id = $1 THEN NULL ELSE archived_at END,
+                 archived_how = CASE WHEN id = $1 THEN NULL ELSE archived_how END,
+                 archived_from_list_id = CASE WHEN id = $1 THEN NULL ELSE archived_from_list_id END,
+                 archived_from_list_name =
+                     CASE WHEN id = $1 THEN NULL ELSE archived_from_list_name END,
+                 updated_at = CASE WHEN id = $1 THEN now() ELSE updated_at END
+             WHERE id = $1 OR list_id = $2",
+            card_id,
+            list_id,
+        )
+        .execute(executor)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn list_archived(
+        &self,
+        executor: impl PgExecutor<'_>,
+        board_id: Uuid,
+        before_card_id: Option<Uuid>,
+        row_limit: i64,
+    ) -> Result<Vec<ArchivedCard>, sqlx::Error> {
+        let archived_rows = sqlx::query!(
+            r#"SELECT cards.id,
+                      cards.title,
+                      cards.archived_from_list_name,
+                      (extract(epoch FROM cards.archived_at) * 1000)::bigint AS "archived_at_millis!",
+                      cards.archived_how AS "archived_how!"
+               FROM cards
+               WHERE cards.board_id = $1
+                 AND cards.archived_at IS NOT NULL
+                 AND ($2::uuid IS NULL
+                      OR (cards.archived_at, cards.id) < (
+                          SELECT before_cards.archived_at, before_cards.id
+                          FROM cards AS before_cards
+                          WHERE before_cards.id = $2 AND before_cards.board_id = $1
+                      ))
+               ORDER BY cards.archived_at DESC, cards.id DESC
+               LIMIT $3"#,
+            board_id,
+            before_card_id,
+            row_limit,
+        )
+        .fetch_all(executor)
+        .await?;
+        archived_rows
+            .into_iter()
+            .map(|archived_row| {
+                let how = ArchiveHow::from_stored(&archived_row.archived_how)
+                    .ok_or_else(|| sqlx::Error::Decode("an unknown archive kind".into()))?;
+                Ok(ArchivedCard {
+                    id: archived_row.id,
+                    title: archived_row.title,
+                    from_list_name: archived_row.archived_from_list_name,
+                    archive: CardArchive {
+                        archived_at: UtcInstant::from_unix_millis(archived_row.archived_at_millis),
+                        how,
+                    },
+                })
+            })
+            .collect()
+    }
+
+    pub async fn list_idle(
+        &self,
+        executor: impl PgExecutor<'_>,
+        now: UtcInstant,
+        card_limit: i64,
+    ) -> Result<Vec<IdleCard>, sqlx::Error> {
+        sqlx::query_as!(
+            IdleCard,
+            "SELECT cards.id AS card_id, cards.user_id
+             FROM cards
+             JOIN board_lists ON board_lists.id = cards.list_id
+             WHERE board_lists.archive_after IS NOT NULL
+               AND (cards.last_moved_at AT TIME ZONE 'UTC' + board_lists.archive_after)
+                       AT TIME ZONE 'UTC'
+                   <= 'epoch'::timestamptz + $1::bigint * interval '1 millisecond'
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM calendar_events
+                   WHERE calendar_events.card_id = cards.id
+                     AND calendar_events.kind = 'tracked'
+                     AND calendar_events.ends_at IS NULL
+               )
+             ORDER BY cards.last_moved_at, cards.id
+             LIMIT $2",
+            now.unix_millis(),
+            card_limit,
+        )
+        .fetch_all(executor)
+        .await
+    }
+
+    pub async fn is_idle(
+        &self,
+        executor: impl PgExecutor<'_>,
+        card_id: Uuid,
+        now: UtcInstant,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                   SELECT 1
+                   FROM cards
+                   JOIN board_lists ON board_lists.id = cards.list_id
+                   WHERE cards.id = $1
+                     AND board_lists.archive_after IS NOT NULL
+                     AND (cards.last_moved_at AT TIME ZONE 'UTC' + board_lists.archive_after)
+                             AT TIME ZONE 'UTC'
+                         <= 'epoch'::timestamptz + $2::bigint * interval '1 millisecond'
+               ) AS "is_idle!""#,
+            card_id,
+            now.unix_millis(),
+        )
+        .fetch_one(executor)
         .await
     }
 
@@ -570,7 +829,7 @@ pub mod tests {
                 .expect("tasks should link");
         let draft_task_id = *linked_task_ids.iter().min().expect("a linked task");
         CompleteTask::new(&db_pool)
-            .execute(owner_id, draft_task_id)
+            .execute(owner_id, draft_task_id, UtcInstant::now())
             .await
             .expect("the task should be completed");
 

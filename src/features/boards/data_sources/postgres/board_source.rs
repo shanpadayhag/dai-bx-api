@@ -1,6 +1,7 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
+use crate::core::idle_length::IdleLength;
 use crate::features::boards::entities::board::{
     BoardCard, BoardList, BoardProperty, BoardPropertyKind, BoardSummary, CardValue,
     CardValueContent, NewBoard, PropertyOption,
@@ -111,13 +112,32 @@ impl PostgresBoardSource {
         executor: impl PgExecutor<'_>,
         board_id: Uuid,
     ) -> Result<Vec<BoardList>, sqlx::Error> {
-        sqlx::query_as!(
-            BoardList,
-            "SELECT id, name, position FROM board_lists WHERE board_id = $1 ORDER BY position",
+        let list_rows = sqlx::query!(
+            r#"SELECT id,
+                      name,
+                      position,
+                      (date_part('year', archive_after) * 12
+                          + date_part('month', archive_after))::integer AS archive_after_months,
+                      date_part('day', archive_after)::integer AS archive_after_days
+               FROM board_lists
+               WHERE board_id = $1
+               ORDER BY position"#,
             board_id,
         )
         .fetch_all(executor)
-        .await
+        .await?;
+        Ok(list_rows
+            .into_iter()
+            .map(|list_row| BoardList {
+                id: list_row.id,
+                name: list_row.name,
+                position: list_row.position,
+                archive_after: list_row
+                    .archive_after_months
+                    .zip(list_row.archive_after_days)
+                    .map(|(months, days)| IdleLength { months, days }),
+            })
+            .collect())
     }
 
     pub async fn list_cards(
@@ -127,8 +147,8 @@ impl PostgresBoardSource {
     ) -> Result<Vec<BoardCard>, sqlx::Error> {
         let card_rows = sqlx::query!(
             r#"SELECT cards.id,
-                      cards.list_id,
-                      cards.position,
+                      cards.list_id AS "list_id!",
+                      cards.position AS "position!",
                       cards.title,
                       to_char(cards.due_date, 'YYYY-MM-DD') AS due_date,
                       to_char(cards.due_time, 'HH24:MI') AS due_time,
@@ -144,7 +164,7 @@ impl PostgresBoardSource {
                    WHERE linked_cards.board_id = $1
                    GROUP BY tasks.card_id
                ) AS card_task_counts ON card_task_counts.card_id = cards.id
-               WHERE cards.board_id = $1
+               WHERE cards.board_id = $1 AND cards.archived_at IS NULL
                ORDER BY cards.list_id, cards.position"#,
             board_id,
         )
@@ -154,8 +174,8 @@ impl PostgresBoardSource {
             .into_iter()
             .map(|card_row| BoardCard {
                 id: card_row.id,
-                list_id: card_row.list_id,
-                position: card_row.position,
+                list_id: Some(card_row.list_id),
+                position: Some(card_row.position),
                 title: card_row.title,
                 due_date: card_row.due_date,
                 due_time: card_row.due_time,

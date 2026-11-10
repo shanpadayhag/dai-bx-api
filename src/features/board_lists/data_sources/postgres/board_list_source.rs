@@ -1,6 +1,7 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
+use crate::core::idle_length::IdleLength;
 use crate::features::board_lists::entities::board_list::{
     ExportedCard, ExportedValue, ListExportHeader, ListPlace, NewBoardList,
 };
@@ -145,6 +146,29 @@ impl PostgresBoardListSource {
         .execute(executor)
         .await?;
         Ok(rename_outcome.rows_affected() == 1)
+    }
+
+    pub async fn set_archive_after(
+        &self,
+        executor: impl PgExecutor<'_>,
+        board_id: Uuid,
+        list_id: Uuid,
+        archive_after: Option<IdleLength>,
+    ) -> Result<bool, sqlx::Error> {
+        let update_outcome = sqlx::query!(
+            "UPDATE board_lists
+             SET archive_after = CASE WHEN $3::int IS NULL THEN NULL
+                                      ELSE make_interval(months => $3, days => $4) END,
+                 updated_at = now()
+             WHERE id = $2 AND board_id = $1",
+            board_id,
+            list_id,
+            archive_after.map(|idle_length| idle_length.months),
+            archive_after.map(|idle_length| idle_length.days),
+        )
+        .execute(executor)
+        .await?;
+        Ok(update_outcome.rows_affected() == 1)
     }
 
     pub async fn find_place(

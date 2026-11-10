@@ -1,7 +1,9 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
-use crate::features::tasks::entities::task::{NewTask, Task, TaskCard, TaskChanges, TrackableTask};
+use crate::features::tasks::entities::task::{
+    CompletedLinkedTask, NewTask, Task, TaskCard, TaskChanges, TrackableTask,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TaskPlace {
@@ -110,6 +112,7 @@ impl PostgresTaskSource {
         sqlx::query_as!(
             TrackableTask,
             r#"SELECT name,
+                      card_id,
                       parent_id IS NULL AS "is_top_level!",
                       completed_at IS NOT NULL AS "is_done!"
                FROM tasks
@@ -188,9 +191,10 @@ impl PostgresTaskSource {
         executor: impl PgExecutor<'_>,
         task_group_id: Uuid,
         task_id: Uuid,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query!(
-            "WITH RECURSIVE task_subtree AS (
+    ) -> Result<Vec<CompletedLinkedTask>, sqlx::Error> {
+        sqlx::query_as!(
+            CompletedLinkedTask,
+            r#"WITH RECURSIVE task_subtree AS (
                  SELECT id
                  FROM tasks
                  WHERE id = $1 AND group_id = $2
@@ -198,16 +202,21 @@ impl PostgresTaskSource {
                  SELECT tasks.id
                  FROM tasks
                  JOIN task_subtree ON tasks.parent_id = task_subtree.id
+             ),
+             completed_tasks AS (
+                 UPDATE tasks
+                 SET completed_at = now(), updated_at = now()
+                 WHERE id IN (SELECT id FROM task_subtree) AND completed_at IS NULL
+                 RETURNING id, card_id, name
              )
-             UPDATE tasks
-             SET completed_at = now(), updated_at = now()
-             WHERE id IN (SELECT id FROM task_subtree) AND completed_at IS NULL",
+             SELECT id AS task_id, card_id AS "card_id!", name
+             FROM completed_tasks
+             WHERE card_id IS NOT NULL"#,
             task_id,
             task_group_id,
         )
-        .execute(executor)
-        .await?;
-        Ok(())
+        .fetch_all(executor)
+        .await
     }
 
     pub async fn insert_many(

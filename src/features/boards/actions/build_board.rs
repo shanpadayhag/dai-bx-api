@@ -89,6 +89,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
+    use crate::core::utc_instant::UtcInstant;
     use crate::features::boards::data_sources::postgres::board_source::tests::{
         seed_board, seed_user_id,
     };
@@ -216,7 +217,7 @@ mod tests {
                 .expect("tasks should link");
         for task_id in task_ids.into_iter().take(done_count) {
             CompleteTask::new(db_pool)
-                .execute(user_id, task_id)
+                .execute(user_id, task_id, UtcInstant::now())
                 .await
                 .expect("the task should be completed");
         }
@@ -242,11 +243,13 @@ mod tests {
                     id: seeded_board.backlog_list_id,
                     name: String::from("Backlog"),
                     position: 0,
+                    archive_after: None,
                 },
                 BoardList {
                     id: seeded_board.doing_list_id,
                     name: String::from("Doing"),
                     position: 1,
+                    archive_after: None,
                 },
             ]
         );
@@ -255,8 +258,8 @@ mod tests {
             vec![
                 BoardCard {
                     id: seeded_board.first_card_id,
-                    list_id: seeded_board.backlog_list_id,
-                    position: 0,
+                    list_id: Some(seeded_board.backlog_list_id),
+                    position: Some(0),
                     title: String::from("First"),
                     due_date: None,
                     due_time: None,
@@ -267,8 +270,8 @@ mod tests {
                 },
                 BoardCard {
                     id: seeded_board.second_card_id,
-                    list_id: seeded_board.backlog_list_id,
-                    position: 1,
+                    list_id: Some(seeded_board.backlog_list_id),
+                    position: Some(1),
                     title: String::from("Second"),
                     due_date: Some(String::from("2026-11-12")),
                     due_time: Some(String::from("09:30")),
