@@ -197,7 +197,7 @@ New passwords are checked against Have I Been Pwned's range API (only the first 
 ### Releases and housekeeping
 
 - Pushing to a `release/*` branch deploys the dev Lambda once CI passes. Pushing a `v1.*` tag deploys prod, once CI passes on the tagged commit. Each environment has its own Supabase project, Lambda, deploy role and secrets.
-- Card schedules run in a second Lambda, `daibx-scheduler`, which EventBridge Scheduler calls every minute. The deploys upload it next to the API. [`docs/scheduler-setup.md`](docs/scheduler-setup.md) has the one-time setup per environment. Locally, run it with `cargo lambda watch --bin daibx-scheduler --env-file .env` and call it with `cargo lambda invoke daibx-scheduler --data-ascii '{}'`.
+- Card schedules and idle-card archiving run in a second Lambda, `daibx-scheduler`, which EventBridge Scheduler calls every minute; each call runs the due schedules, then archives the cards left idle past their column's length. The deploys upload it next to the API. [`docs/scheduler-setup.md`](docs/scheduler-setup.md) has the one-time setup per environment. Locally, run it with `cargo lambda watch --bin daibx-scheduler --env-file .env` and call it with `cargo lambda invoke daibx-scheduler --data-ascii '{}'`.
 - Expired sessions, tokens, challenges and old security events are deleted daily by `purge_expired_auth_data()`. Schedule it once per Supabase project by running `ops/schedule-purge.sql` as the database owner (in the SQL editor, or with `psql`). Re-running it replaces the schedule. `ops/check-purge.sql` shows the job and its last runs.
 - To end someone's sessions as the operator, run `psql "$DATABASE_URL" -v account_email='person@example.com' -f ops/end-account-sessions.sql`. `ops/end-all-sessions.sql` ends everyone's.
 
@@ -225,7 +225,8 @@ cargo sqlx prepare -- --all-targets
 - [x] Board, with user-defined card properties, Markdown notes and task-to-card links
 - [x] Calendar and time tracking: planned and tracked events, start and finish, check-ins and working hours
 - [x] Card schedules, repeating planned events and calendar time zones
-- [ ] Card triggers, idle cards and the card archive
+- [x] Card triggers, move history, idle cards and the card archive
+- [ ] Group schedules and repeat follow-ups
 - [ ] Automatic scheduling
 
 See the [open issues](https://github.com/shanpadayhag/dai-bx-api/issues) for a full list of proposed features and known issues.
