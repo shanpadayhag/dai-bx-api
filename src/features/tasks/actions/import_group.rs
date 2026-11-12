@@ -95,7 +95,7 @@ impl<'a> ImportGroup<'a> {
             .await?;
         let group_tasks = self
             .postgres_task_source
-            .list_for_group(&mut *import_transaction, created_task_group.id)
+            .list_for_group(&mut *import_transaction, created_task_group.id, None)
             .await?;
         import_transaction.commit().await?;
         Ok(GroupTasks {

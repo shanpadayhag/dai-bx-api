@@ -3,6 +3,7 @@ use crate::features::board_lists::error::BoardListError;
 use crate::features::boards::error::BoardError;
 use crate::features::calendar_events::error::CalendarEventError;
 use crate::features::card_schedules::error::ScheduleError;
+use crate::features::task_groups::error::TaskGroupError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CardError {
@@ -66,6 +67,16 @@ impl From<ScheduleError> for CardError {
             ScheduleError::Invalid(invalid_message) => CardError::Invalid(invalid_message),
             ScheduleError::NotFound => CardError::NotFound,
             ScheduleError::Database(database_error) => CardError::Database(database_error),
+        }
+    }
+}
+
+impl From<TaskGroupError> for CardError {
+    fn from(task_group_error: TaskGroupError) -> Self {
+        match task_group_error {
+            TaskGroupError::Invalid(invalid_message) => CardError::Invalid(invalid_message),
+            TaskGroupError::NotFound => CardError::NotFound,
+            TaskGroupError::Database(database_error) => CardError::Database(database_error),
         }
     }
 }

@@ -4,10 +4,13 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::core::error::AppError;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::board_properties::actions::create_board_property::CreateBoardProperty;
 use crate::features::board_properties::entities::board_property::{
-    OptionDraft, validate_new_property_options, validate_option_draft, validate_property_name,
+    OptionDraft, PropertyDraft, validate_new_property_options, validate_option_draft,
+    validate_property_name,
 };
 use crate::features::board_properties::handlers::post_property_options::PostPropertyOptionsRequest;
 use crate::features::boards::entities::board::BoardPropertyKind;
@@ -25,6 +28,7 @@ pub struct PostBoardPropertiesRequest {
 pub async fn post_board_properties(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(board_id_text): Path<String>,
     Json(post_request): Json<PostBoardPropertiesRequest>,
 ) -> Result<Json<BoardResponse>, AppError> {
@@ -42,9 +46,13 @@ pub async fn post_board_properties(
         .execute(
             write_session.user_id,
             board_id,
-            &property_name,
-            post_request.kind,
-            &option_drafts,
+            &PropertyDraft {
+                name: property_name,
+                kind: post_request.kind,
+                option_drafts,
+            },
+            &request_time_zone,
+            UtcInstant::now(),
         )
         .await?;
     Ok(Json(board.into()))

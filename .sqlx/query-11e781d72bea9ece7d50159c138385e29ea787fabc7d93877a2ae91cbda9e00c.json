@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT card_schedules.id,\n                      card_schedules.card_id,\n                      card_schedules.board_id,\n                      cards.title AS card_title,\n                      card_schedules.target_list_id,\n                      board_lists.name AS \"target_list_name?\",\n                      card_schedules.time_zone,\n                      to_char(card_schedules.local_start, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS \"local_start_text!\",\n                      card_schedules.repeat_rule AS \"repeat_rule: Json<RepeatRule>\",\n                      card_schedules.block_minutes,\n                      card_schedules.block_category_id,\n                      card_schedules.paused,\n                      (extract(epoch FROM card_schedules.next_run_at) * 1000)::bigint AS next_run_at_millis\n               FROM card_schedules\n               JOIN cards ON cards.id = card_schedules.card_id\n               JOIN board_lists ON board_lists.id = card_schedules.target_list_id\n               WHERE card_schedules.user_id = $1\n                 AND NOT card_schedules.paused\n                 AND card_schedules.next_run_at IS NOT NULL\n               ORDER BY card_schedules.id",
+  "query": "SELECT card_schedules.id,\n                      card_schedules.card_id,\n                      card_schedules.board_id,\n                      cards.title AS card_title,\n                      card_schedules.target_list_id,\n                      board_lists.name AS \"target_list_name?\",\n                      card_schedules.time_zone,\n                      to_char(card_schedules.local_start, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS \"local_start_text!\",\n                      card_schedules.repeat_rule AS \"repeat_rule: Json<RepeatRule>\",\n                      card_schedules.block_minutes,\n                      card_schedules.block_category_id,\n                      to_char(card_schedules.block_local_time, 'HH24:MI') AS block_time_text,\n                      card_schedules.paused,\n                      (extract(epoch FROM card_schedules.next_run_at) * 1000)::bigint AS next_run_at_millis\n               FROM card_schedules\n               JOIN cards ON cards.id = card_schedules.card_id\n               JOIN board_lists ON board_lists.id = card_schedules.target_list_id\n               WHERE card_schedules.user_id = $1\n                 AND NOT card_schedules.paused\n                 AND card_schedules.next_run_at IS NOT NULL\n               ORDER BY card_schedules.id",
   "describe": {
     "columns": [
       {
@@ -121,6 +121,12 @@
       },
       {
         "ordinal": 11,
+        "name": "block_time_text",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 12,
         "name": "paused",
         "type_info": "Bool",
         "origin": {
@@ -131,7 +137,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "next_run_at_millis",
         "type_info": "Int8",
         "origin": "Expression"
@@ -154,9 +160,10 @@
       true,
       true,
       true,
+      null,
       false,
       null
     ]
   },
-  "hash": "024d9aff61606c4a689b0c73662380d7bef8b212986d2eab4efec21d93cef6c4"
+  "hash": "11e781d72bea9ece7d50159c138385e29ea787fabc7d93877a2ae91cbda9e00c"
 }

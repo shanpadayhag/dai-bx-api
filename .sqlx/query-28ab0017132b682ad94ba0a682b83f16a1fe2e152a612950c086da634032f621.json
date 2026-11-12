@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT tasks.id,\n                      tasks.parent_id,\n                      tasks.position,\n                      tasks.name,\n                      tasks.completed_at IS NOT NULL AS \"is_done!\",\n                      tasks.estimate_minutes,\n                      cards.id AS \"card_id?\",\n                      cards.title AS \"card_title?\",\n                      cards.board_id AS \"card_board_id?\",\n                      (SELECT count(*)\n                       FROM calendar_events\n                       WHERE calendar_events.task_id = tasks.id) AS \"tracked_event_count!\"\n               FROM tasks\n               LEFT JOIN cards ON cards.id = tasks.card_id\n               WHERE tasks.group_id = $1\n               ORDER BY tasks.parent_id NULLS FIRST, tasks.position, tasks.id",
+  "query": "SELECT tasks.id,\n                      tasks.parent_id,\n                      tasks.position,\n                      tasks.name,\n                      (tasks.completed_at >= coalesce(to_timestamp($2::bigint / 1000.0), '-infinity')) IS TRUE AS \"is_done!\",\n                      tasks.estimate_minutes,\n                      cards.id AS \"card_id?\",\n                      cards.title AS \"card_title?\",\n                      cards.board_id AS \"card_board_id?\",\n                      (SELECT count(*)\n                       FROM calendar_events\n                       WHERE calendar_events.task_id = tasks.id) AS \"tracked_event_count!\"\n               FROM tasks\n               LEFT JOIN cards ON cards.id = tasks.card_id\n               WHERE tasks.group_id = $1\n               ORDER BY tasks.parent_id NULLS FIRST, tasks.position, tasks.id",
   "describe": {
     "columns": [
       {
@@ -106,7 +106,8 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Int8"
       ]
     },
     "nullable": [
@@ -122,5 +123,5 @@
       null
     ]
   },
-  "hash": "c9ed89ab61a54be650978b7c09f0b90e1cd6862a03fcec6a49ed62bd9bab3af4"
+  "hash": "28ab0017132b682ad94ba0a682b83f16a1fe2e152a612950c086da634032f621"
 }

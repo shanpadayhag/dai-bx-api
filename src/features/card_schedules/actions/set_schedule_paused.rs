@@ -109,6 +109,7 @@ mod tests {
         let block = Some(ScheduleBlock {
             minutes: 30,
             category_id: None,
+            start_time: None,
         });
         let create_card_schedule = CreateCardSchedule::new(&db_pool);
         create_card_schedule

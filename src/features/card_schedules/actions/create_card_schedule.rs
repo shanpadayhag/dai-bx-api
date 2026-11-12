@@ -103,6 +103,7 @@ mod tests {
                     block: Some(ScheduleBlock {
                         minutes: 60,
                         category_id: Some(category_id),
+                        start_time: None,
                     }),
                     ..weekly_settings(seeded_card.to_do_list_id)
                 },

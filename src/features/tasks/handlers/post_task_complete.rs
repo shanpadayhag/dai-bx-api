@@ -3,6 +3,7 @@ use axum::extract::{Path, State};
 use uuid::Uuid;
 
 use crate::core::error::AppError;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::tasks::actions::complete_task::CompleteTask;
@@ -12,11 +13,17 @@ use crate::features::throttling::entities::write_session::WriteSession;
 pub async fn post_task_complete(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(task_id_text): Path<String>,
 ) -> Result<Json<GroupTasksResponse>, AppError> {
     let task_id = Uuid::parse_str(&task_id_text).map_err(|_| AppError::NotFound)?;
     let group_tasks = CompleteTask::new(&app_state.db_pool)
-        .execute(write_session.user_id, task_id, UtcInstant::now())
+        .execute(
+            write_session.user_id,
+            task_id,
+            &request_time_zone,
+            UtcInstant::now(),
+        )
         .await?;
     Ok(Json(group_tasks.into()))
 }

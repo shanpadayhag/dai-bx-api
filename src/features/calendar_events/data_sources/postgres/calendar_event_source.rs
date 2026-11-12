@@ -618,6 +618,7 @@ impl PostgresCalendarEventSource {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::core::request_time_zone::RequestTimeZone;
     use sqlx::PgPool;
 
     use super::*;
@@ -665,7 +666,14 @@ pub mod tests {
             .await
             .expect("the group should be created");
         let group_tasks = AddTask::new(db_pool)
-            .execute(user_id, task_group.id, "Write the changelog", None)
+            .execute(
+                user_id,
+                task_group.id,
+                "Write the changelog",
+                None,
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the task should be added");
         let task_id = group_tasks
@@ -682,12 +690,24 @@ pub mod tests {
             .await
             .expect("the board should be created");
         let board = CreateBoardList::new(db_pool)
-            .execute(user_id, board.board.id, "Doing")
+            .execute(
+                user_id,
+                board.board.id,
+                "Doing",
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the list should be created");
         let list_id = board.lists.first().expect("the list should be listed").id;
         let board = CreateCard::new(db_pool)
-            .execute(user_id, list_id, "Plan the release")
+            .execute(
+                user_id,
+                list_id,
+                "Plan the release",
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the card should be created");
         let card_id = board.cards.first().expect("the card should be listed").id;

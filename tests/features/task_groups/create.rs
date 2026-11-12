@@ -42,8 +42,19 @@ async fn creates_a_group_with_just_a_trimmed_name_and_no_category(db_pool: PgPoo
     response_keys.sort();
     assert_eq!(
         response_keys,
-        vec!["id", "name", "openTaskCount", "taskCount"]
+        vec![
+            "id",
+            "name",
+            "openTaskCount",
+            "shows",
+            "taskCount",
+            "timetable",
+            "unchecks"
+        ]
     );
+    assert_eq!(created_group["shows"], serde_json::Value::Null);
+    assert_eq!(created_group["unchecks"], serde_json::Value::Null);
+    assert_eq!(created_group["timetable"]["dueNow"], true);
     assert_eq!(created_group["name"], "DaiBX");
     assert_eq!(created_group["openTaskCount"], 0);
 }

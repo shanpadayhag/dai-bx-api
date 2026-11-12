@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT tasks.id,\n                      tasks.name,\n                      tasks.completed_at IS NOT NULL AS \"is_done!\",\n                      task_groups.id AS group_id,\n                      task_groups.name AS group_name\n               FROM tasks\n               JOIN task_groups ON task_groups.id = tasks.group_id\n               WHERE tasks.card_id = $1\n               ORDER BY task_groups.created_at, task_groups.id, tasks.position, tasks.id",
+  "query": "SELECT tasks.id,\n                      tasks.name,\n                      (tasks.completed_at\n                       >= coalesce(to_timestamp(uncheck_cutoffs.cutoff_millis / 1000.0),\n                                   '-infinity')) IS TRUE AS \"is_done!\",\n                      task_groups.id AS group_id,\n                      task_groups.name AS group_name\n               FROM tasks\n               JOIN task_groups ON task_groups.id = tasks.group_id\n               LEFT JOIN unnest($2::uuid[], $3::bigint[])\n                    AS uncheck_cutoffs(group_id, cutoff_millis)\n                    ON uncheck_cutoffs.group_id = tasks.group_id\n               WHERE tasks.card_id = $1\n               ORDER BY task_groups.created_at, task_groups.id, tasks.position, tasks.id",
   "describe": {
     "columns": [
       {
@@ -56,7 +56,9 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "UuidArray",
+        "Int8Array"
       ]
     },
     "nullable": [
@@ -67,5 +69,5 @@
       false
     ]
   },
-  "hash": "c3f628f895b7221d9ea24856cb64507f7f56490fb9dee05d9261cdd266ae1f2e"
+  "hash": "39e7506d59526b6323577c45a085f345afc34ac74d8c2721aa27d3e3b9a71573"
 }

@@ -1,13 +1,14 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::actions::open_running_event::OpenRunningEvent;
 use crate::features::calendar_events::entities::calendar_event::{
     NewRunningEvent, RunningItem, TrackedSubject,
 };
 use crate::features::cards::actions::fire_card_trigger::FireCardTrigger;
-use crate::features::cards::entities::card_trigger::TriggerKind;
+use crate::features::cards::entities::card_trigger::TriggerEvent;
 use crate::features::tasks::actions::find_trackable_task::FindTrackableTask;
 use crate::features::tasks::actions::lock_group_of_task::LockGroupOfTask;
 use crate::features::tracking::error::TrackingError;
@@ -35,6 +36,7 @@ impl<'a> StartTask<'a> {
         &self,
         user_id: Uuid,
         task_id: Uuid,
+        request_time_zone: &RequestTimeZone,
         now: UtcInstant,
     ) -> Result<RunningItem, TrackingError> {
         let mut start_transaction = self.db_pool.begin().await?;
@@ -43,7 +45,13 @@ impl<'a> StartTask<'a> {
             .await?;
         let trackable_task = self
             .find_trackable_task
-            .execute(&mut start_transaction, user_id, task_id)
+            .execute(
+                &mut start_transaction,
+                user_id,
+                task_id,
+                request_time_zone,
+                now,
+            )
             .await?;
         if !trackable_task.can_start() {
             return Err(TrackingError::Invalid(String::from(
@@ -68,7 +76,7 @@ impl<'a> StartTask<'a> {
                     &mut start_transaction,
                     user_id,
                     card_id,
-                    TriggerKind::Started,
+                    TriggerEvent::Started,
                     Some(&trackable_task.name),
                     now,
                 )
@@ -121,12 +129,26 @@ pub mod tests {
             .expect("the group should be created");
         let add_task = AddTask::new(db_pool);
         let group_tasks = add_task
-            .execute(user_id, task_group.id, "Release", None)
+            .execute(
+                user_id,
+                task_group.id,
+                "Release",
+                None,
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the task should be added");
         let task_id = task_id_named(&group_tasks, "Release");
         let group_tasks = add_task
-            .execute(user_id, task_group.id, "Tag the build", Some(task_id))
+            .execute(
+                user_id,
+                task_group.id,
+                "Tag the build",
+                Some(task_id),
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the subtask should be added");
         (task_id, task_id_named(&group_tasks, "Tag the build"))
@@ -139,11 +161,21 @@ pub mod tests {
         let start_task = StartTask::new(&db_pool);
 
         let running_item = start_task
-            .execute(owner_id, task_id, UtcInstant::now())
+            .execute(
+                owner_id,
+                task_id,
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the task should start");
         let second_start = start_task
-            .execute(owner_id, task_id, UtcInstant::now())
+            .execute(
+                owner_id,
+                task_id,
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await;
 
         assert_eq!(running_item.event.title, "Release");
@@ -159,10 +191,20 @@ pub mod tests {
         let start_task = StartTask::new(&db_pool);
 
         let subtask_start = start_task
-            .execute(owner_id, subtask_id, UtcInstant::now())
+            .execute(
+                owner_id,
+                subtask_id,
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await;
         let foreign_start = start_task
-            .execute(other_person_id, task_id, UtcInstant::now())
+            .execute(
+                other_person_id,
+                task_id,
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await;
 
         assert!(matches!(subtask_start, Err(TrackingError::Invalid(_))));

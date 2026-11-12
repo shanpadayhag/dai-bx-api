@@ -188,7 +188,7 @@ async fn creates_a_once_schedule_in_its_own_zone_with_a_block(db_pool: PgPool) {
     assert_eq!(once_schedule["repeat"], serde_json::Value::Null);
     assert_eq!(
         once_schedule["block"],
-        json!({ "minutes": 45, "categoryId": studies_category_id })
+        json!({ "minutes": 45, "categoryId": studies_category_id, "time": null })
     );
     assert_eq!(once_schedule["nextRunAt"], "2030-03-01T01:30:00.000Z");
 }

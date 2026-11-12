@@ -5,7 +5,9 @@ use uuid::Uuid;
 
 use crate::core::error::AppError;
 use crate::core::json_field::deserialize_present_field;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::board_properties::actions::update_property_option::UpdatePropertyOption;
 use crate::features::board_properties::entities::board_property::{
     OptionChanges, validate_option_color, validate_option_name,
@@ -24,6 +26,7 @@ pub struct PatchOptionRequest {
 pub async fn patch_option(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(option_id_text): Path<String>,
     Json(patch_request): Json<PatchOptionRequest>,
 ) -> Result<Json<BoardResponse>, AppError> {
@@ -39,7 +42,13 @@ pub async fn patch_option(
             .transpose()?,
     };
     let board = UpdatePropertyOption::new(&app_state.db_pool)
-        .execute(write_session.user_id, option_id, &option_changes)
+        .execute(
+            write_session.user_id,
+            option_id,
+            &option_changes,
+            &request_time_zone,
+            UtcInstant::now(),
+        )
         .await?;
     Ok(Json(board.into()))
 }

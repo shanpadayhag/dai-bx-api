@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE task_groups\n             SET name = $3,\n                 show_rule = $4,\n                 show_start_date = $5::text::date,\n                 show_window_start = $6::text::time,\n                 show_window_end = $7::text::time,\n                 uncheck_rule = $8,\n                 uncheck_start_date = $9::text::date,\n                 uncheck_time = $10::text::time,\n                 updated_at = now()\n             WHERE id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "82e4c57ecd9ad65aa26e734737f0b5ee5cceb01d5eae232c12f94a20c1a04be0"
+}

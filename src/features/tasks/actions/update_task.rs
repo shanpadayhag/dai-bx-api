@@ -1,8 +1,11 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::actions::rename_tracked_events::RenameTrackedEvents;
 use crate::features::calendar_events::entities::calendar_event::TrackedSubject;
+use crate::features::task_groups::actions::find_uncheck_cutoffs::FindUncheckCutoffs;
 use crate::features::tasks::actions::lock_group_of_task::LockGroupOfTask;
 use crate::features::tasks::data_sources::postgres::task_source::PostgresTaskSource;
 use crate::features::tasks::entities::task::{GroupTasks, TaskChanges};
@@ -12,6 +15,7 @@ pub struct UpdateTask<'a> {
     db_pool: &'a PgPool,
     lock_group_of_task: LockGroupOfTask,
     rename_tracked_events: RenameTrackedEvents,
+    find_uncheck_cutoffs: FindUncheckCutoffs,
     postgres_task_source: PostgresTaskSource,
 }
 
@@ -21,6 +25,7 @@ impl<'a> UpdateTask<'a> {
             db_pool,
             lock_group_of_task: LockGroupOfTask::new(),
             rename_tracked_events: RenameTrackedEvents::new(),
+            find_uncheck_cutoffs: FindUncheckCutoffs::new(),
             postgres_task_source: PostgresTaskSource,
         }
     }
@@ -31,6 +36,8 @@ impl<'a> UpdateTask<'a> {
         task_id: Uuid,
         task_changes: &TaskChanges,
         renames_events: bool,
+        request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
     ) -> Result<GroupTasks, TaskError> {
         let mut update_transaction = self.db_pool.begin().await?;
         let task_group_details = self
@@ -61,9 +68,18 @@ impl<'a> UpdateTask<'a> {
                 )
                 .await?;
         }
+        let uncheck_cutoff_millis = self
+            .find_uncheck_cutoffs
+            .execute(&mut *update_transaction, user_id, request_time_zone, now)
+            .await?
+            .cutoff_millis_for(task_group_details.id);
         let group_tasks = self
             .postgres_task_source
-            .list_for_group(&mut *update_transaction, task_group_details.id)
+            .list_for_group(
+                &mut *update_transaction,
+                task_group_details.id,
+                uncheck_cutoff_millis,
+            )
             .await?;
         update_transaction.commit().await?;
         Ok(GroupTasks {

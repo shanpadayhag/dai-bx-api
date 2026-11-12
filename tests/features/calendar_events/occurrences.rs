@@ -582,6 +582,7 @@ async fn refuses_a_bad_scope_or_a_repeat_on_one_occurrence(db_pool: PgPool) {
             "inputZone": "UTC",
             "repeat": { "frequency": "daily", "interval": 1, "ends": { "never": true } },
         }),
+        json!({ "scope": "this", "repeat": null }),
     ] {
         let response = patch_occurrence(
             &db_pool,
@@ -615,5 +616,108 @@ async fn refuses_a_bad_scope_or_a_repeat_on_one_occurrence(db_pool: PgPool) {
     assert_eq!(
         week_of(&db_pool, &signed_in_person, "2026-11-16").await,
         vec![shown("Gym", NOV_16)]
+    );
+}
+
+#[sqlx::test]
+async fn stops_repeating_from_this_occurrence_on(db_pool: PgPool) {
+    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
+    let series_id = create_weekly_gym(&db_pool, &signed_in_person, json!({ "never": true })).await;
+
+    let plain_event = change_occurrence(
+        &db_pool,
+        &signed_in_person,
+        &series_id,
+        NOV_23,
+        json!({ "scope": "following", "repeat": null }),
+    )
+    .await;
+
+    assert_eq!(plain_event["series"], serde_json::Value::Null);
+    assert_eq!(plain_event["startsAt"], NOV_23);
+    assert_eq!(
+        week_of(&db_pool, &signed_in_person, "2026-11-16").await,
+        vec![shown("Gym", NOV_16)]
+    );
+    assert_eq!(
+        week_of(&db_pool, &signed_in_person, "2026-11-23").await,
+        vec![shown("Gym", NOV_23)]
+    );
+    assert!(
+        week_of(&db_pool, &signed_in_person, "2026-11-30")
+            .await
+            .is_empty()
+    );
+}
+
+#[sqlx::test]
+async fn stops_repeating_for_all_and_keeps_only_this_occurrence(db_pool: PgPool) {
+    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
+    let series_id = create_weekly_gym(&db_pool, &signed_in_person, json!({ "never": true })).await;
+
+    let plain_event = change_occurrence(
+        &db_pool,
+        &signed_in_person,
+        &series_id,
+        NOV_23,
+        json!({ "scope": "all", "repeat": null }),
+    )
+    .await;
+
+    assert_eq!(plain_event["series"], serde_json::Value::Null);
+    for empty_monday in ["2026-11-09", "2026-11-16", "2026-11-30"] {
+        assert!(
+            week_of(&db_pool, &signed_in_person, empty_monday)
+                .await
+                .is_empty(),
+            "{empty_monday}"
+        );
+    }
+    assert_eq!(
+        week_of(&db_pool, &signed_in_person, "2026-11-23").await,
+        vec![shown("Gym", NOV_23)]
+    );
+}
+
+#[sqlx::test]
+async fn stopping_a_changed_occurrence_keeps_its_change(db_pool: PgPool) {
+    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
+    let series_id = create_weekly_gym(&db_pool, &signed_in_person, json!({ "never": true })).await;
+    change_occurrence(
+        &db_pool,
+        &signed_in_person,
+        &series_id,
+        NOV_23,
+        json!({
+            "scope": "this",
+            "title": "Late gym",
+            "start": "2026-11-23T11:00",
+            "end": "2026-11-23T12:00",
+            "inputZone": "UTC",
+        }),
+    )
+    .await;
+
+    change_occurrence(
+        &db_pool,
+        &signed_in_person,
+        &series_id,
+        NOV_23,
+        json!({ "scope": "following", "repeat": null }),
+    )
+    .await;
+
+    assert_eq!(
+        week_of(&db_pool, &signed_in_person, "2026-11-16").await,
+        vec![shown("Gym", NOV_16)]
+    );
+    assert_eq!(
+        week_of(&db_pool, &signed_in_person, "2026-11-23").await,
+        vec![shown("Late gym", "2026-11-23T11:00:00.000Z")]
+    );
+    assert!(
+        week_of(&db_pool, &signed_in_person, "2026-11-30")
+            .await
+            .is_empty()
     );
 }

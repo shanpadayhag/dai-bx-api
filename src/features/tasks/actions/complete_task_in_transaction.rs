@@ -1,11 +1,13 @@
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::actions::close_running_events::CloseRunningEvents;
 use crate::features::calendar_events::entities::calendar_event::ClosingScope;
 use crate::features::cards::actions::fire_card_trigger::FireCardTrigger;
-use crate::features::cards::entities::card_trigger::TriggerKind;
+use crate::features::cards::entities::card_trigger::TriggerEvent;
+use crate::features::task_groups::actions::find_uncheck_cutoffs::FindUncheckCutoffs;
 use crate::features::tasks::actions::lock_group_of_task::LockGroupOfTask;
 use crate::features::tasks::data_sources::postgres::task_source::PostgresTaskSource;
 use crate::features::tasks::entities::task::{CompletedLinkedTask, GroupTasks};
@@ -31,6 +33,7 @@ pub struct CompleteTaskInTransaction {
     lock_group_of_task: LockGroupOfTask,
     close_running_events: CloseRunningEvents,
     fire_card_trigger: FireCardTrigger,
+    find_uncheck_cutoffs: FindUncheckCutoffs,
     postgres_task_source: PostgresTaskSource,
 }
 
@@ -40,6 +43,7 @@ impl CompleteTaskInTransaction {
             lock_group_of_task: LockGroupOfTask::new(),
             close_running_events: CloseRunningEvents::new(),
             fire_card_trigger: FireCardTrigger::new(),
+            find_uncheck_cutoffs: FindUncheckCutoffs::new(),
             postgres_task_source: PostgresTaskSource,
         }
     }
@@ -49,6 +53,7 @@ impl CompleteTaskInTransaction {
         connection: &mut PgConnection,
         user_id: Uuid,
         task_id: Uuid,
+        request_time_zone: &RequestTimeZone,
         now: UtcInstant,
     ) -> Result<GroupTasks, TaskError> {
         let task_group_details = self
@@ -58,9 +63,19 @@ impl CompleteTaskInTransaction {
         self.close_running_events
             .execute(&mut *connection, user_id, ClosingScope::Task(task_id))
             .await?;
+        let uncheck_cutoffs = self
+            .find_uncheck_cutoffs
+            .execute(&mut *connection, user_id, request_time_zone, now)
+            .await?;
+        let uncheck_cutoff_millis = uncheck_cutoffs.cutoff_millis_for(task_group_details.id);
         let completed_linked_tasks = self
             .postgres_task_source
-            .complete_task_and_descendants(&mut *connection, task_group_details.id, task_id)
+            .complete_task_and_descendants(
+                &mut *connection,
+                task_group_details.id,
+                task_id,
+                uncheck_cutoff_millis,
+            )
             .await?;
         for finishing_task in finishing_task_per_card(task_id, completed_linked_tasks) {
             self.fire_card_trigger
@@ -68,7 +83,9 @@ impl CompleteTaskInTransaction {
                     &mut *connection,
                     user_id,
                     finishing_task.card_id,
-                    TriggerKind::Finished,
+                    TriggerEvent::Finished {
+                        uncheck_cutoffs: &uncheck_cutoffs,
+                    },
                     Some(&finishing_task.name),
                     now,
                 )
@@ -76,7 +93,11 @@ impl CompleteTaskInTransaction {
         }
         let group_tasks = self
             .postgres_task_source
-            .list_for_group(&mut *connection, task_group_details.id)
+            .list_for_group(
+                &mut *connection,
+                task_group_details.id,
+                uncheck_cutoff_millis,
+            )
             .await?;
         Ok(GroupTasks {
             group: task_group_details,

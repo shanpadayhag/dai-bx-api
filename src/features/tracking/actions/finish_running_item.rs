@@ -1,6 +1,7 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::actions::find_event_task_id::FindEventTaskId;
 use crate::features::calendar_events::actions::finish_running_event::FinishRunningEvent;
@@ -34,6 +35,7 @@ impl<'a> FinishRunningItem<'a> {
         event_id: Uuid,
         requested_ends_at: UtcInstant,
         marks_done: bool,
+        request_time_zone: &RequestTimeZone,
         now: UtcInstant,
     ) -> Result<FinishedItem, TrackingError> {
         let mut finish_transaction = self.db_pool.begin().await?;
@@ -64,7 +66,13 @@ impl<'a> FinishRunningItem<'a> {
         let group_tasks = match marked_task_id {
             Some(task_id) => Some(
                 self.complete_task_in_transaction
-                    .execute(&mut finish_transaction, user_id, task_id, now)
+                    .execute(
+                        &mut finish_transaction,
+                        user_id,
+                        task_id,
+                        request_time_zone,
+                        now,
+                    )
                     .await?,
             ),
             None => None,
@@ -90,7 +98,12 @@ mod tests {
         let owner_id = seed_user_id(&db_pool, "owner@example.com").await;
         let (task_id, subtask_id) = seed_task_and_subtask(&db_pool, owner_id).await;
         let running_item = StartTask::new(&db_pool)
-            .execute(owner_id, task_id, UtcInstant::now())
+            .execute(
+                owner_id,
+                task_id,
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the task should start");
 
@@ -100,6 +113,7 @@ mod tests {
                 running_item.event.id,
                 UtcInstant::now().plus_minutes(1),
                 true,
+                &RequestTimeZone::default(),
                 UtcInstant::now(),
             )
             .await
@@ -124,7 +138,12 @@ mod tests {
         let owner_id = seed_user_id(&db_pool, "owner@example.com").await;
         let (task_id, _) = seed_task_and_subtask(&db_pool, owner_id).await;
         let running_item = StartTask::new(&db_pool)
-            .execute(owner_id, task_id, UtcInstant::now())
+            .execute(
+                owner_id,
+                task_id,
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the task should start");
 
@@ -134,6 +153,7 @@ mod tests {
                 running_item.event.id,
                 UtcInstant::now(),
                 false,
+                &RequestTimeZone::default(),
                 UtcInstant::now(),
             )
             .await

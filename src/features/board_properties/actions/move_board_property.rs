@@ -1,6 +1,8 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::board_properties::actions::lock_board_of_property::LockBoardOfProperty;
 use crate::features::board_properties::data_sources::postgres::board_property_source::PostgresBoardPropertySource;
 use crate::features::board_properties::error::BoardPropertyError;
@@ -29,6 +31,8 @@ impl<'a> MoveBoardProperty<'a> {
         user_id: Uuid,
         property_id: Uuid,
         requested_position: i32,
+        request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
     ) -> Result<Board, BoardPropertyError> {
         let mut move_transaction = self.db_pool.begin().await?;
         let board_summary = self
@@ -54,7 +58,13 @@ impl<'a> MoveBoardProperty<'a> {
         }
         let board = self
             .build_board
-            .execute(&mut move_transaction, board_summary)
+            .execute(
+                &mut move_transaction,
+                user_id,
+                board_summary,
+                request_time_zone,
+                now,
+            )
             .await?;
         move_transaction.commit().await?;
         Ok(board)

@@ -1,14 +1,16 @@
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::core::utc_instant::UtcInstant;
+use crate::features::calendar_events::actions::cut_off_series::CutOffSeries;
 use crate::features::calendar_events::data_sources::postgres::calendar_event_source::PostgresCalendarEventSource;
 use crate::features::calendar_events::data_sources::postgres::event_series_source::PostgresEventSeriesSource;
-use crate::features::calendar_events::entities::event_series::{EventSeries, OccurrenceScope};
+use crate::features::calendar_events::entities::event_series::OccurrenceScope;
 use crate::features::calendar_events::error::CalendarEventError;
 
 pub struct DeleteSeriesOccurrence<'a> {
     db_pool: &'a PgPool,
+    cut_off_series: CutOffSeries,
     postgres_calendar_event_source: PostgresCalendarEventSource,
     postgres_event_series_source: PostgresEventSeriesSource,
 }
@@ -17,6 +19,7 @@ impl<'a> DeleteSeriesOccurrence<'a> {
     pub fn new(db_pool: &'a PgPool) -> Self {
         Self {
             db_pool,
+            cut_off_series: CutOffSeries::new(),
             postgres_calendar_event_source: PostgresCalendarEventSource,
             postgres_event_series_source: PostgresEventSeriesSource,
         }
@@ -54,7 +57,8 @@ impl<'a> DeleteSeriesOccurrence<'a> {
                     .await?;
             }
             OccurrenceScope::Following => {
-                self.cut_off_from(&mut delete_transaction, user_id, &series, original_start)
+                self.cut_off_series
+                    .execute(&mut delete_transaction, user_id, &series, original_start)
                     .await?;
             }
             OccurrenceScope::All => {
@@ -64,49 +68,6 @@ impl<'a> DeleteSeriesOccurrence<'a> {
             }
         }
         delete_transaction.commit().await?;
-        Ok(())
-    }
-
-    async fn cut_off_from(
-        &self,
-        delete_transaction: &mut Transaction<'_, Postgres>,
-        user_id: Uuid,
-        series: &EventSeries,
-        original_start: UtcInstant,
-    ) -> Result<(), CalendarEventError> {
-        self.postgres_event_series_source
-            .update(
-                &mut **delete_transaction,
-                user_id,
-                &EventSeries {
-                    until_instant: Some(original_start),
-                    ..series.clone()
-                },
-            )
-            .await?;
-        let later_override_starts: Vec<UtcInstant> = self
-            .postgres_calendar_event_source
-            .list_override_starts(&mut **delete_transaction, series.id)
-            .await?
-            .into_iter()
-            .filter(|override_start| *override_start >= original_start)
-            .collect();
-        let later_cancelled_starts: Vec<UtcInstant> = series
-            .cancelled_starts
-            .iter()
-            .copied()
-            .filter(|cancelled_start| *cancelled_start >= original_start)
-            .collect();
-        self.postgres_calendar_event_source
-            .delete_overrides(&mut **delete_transaction, series.id, &later_override_starts)
-            .await?;
-        self.postgres_event_series_source
-            .delete_exceptions(
-                &mut **delete_transaction,
-                series.id,
-                &later_cancelled_starts,
-            )
-            .await?;
         Ok(())
     }
 }
@@ -121,6 +82,7 @@ mod tests {
         new_weekly_series, seed_series,
     };
     use crate::features::calendar_events::entities::calendar_event::EventRange;
+    use crate::features::calendar_events::entities::event_series::EventSeries;
 
     const NOV_9: &str = "2026-11-09T10:00:00Z";
     const NOV_16: &str = "2026-11-16T10:00:00Z";

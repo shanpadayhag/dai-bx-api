@@ -2,6 +2,7 @@ use sqlx::PgExecutor;
 use uuid::Uuid;
 
 use crate::features::task_groups::data_sources::postgres::task_group_source::PostgresTaskGroupSource;
+use crate::features::task_groups::entities::group_rules::GroupRules;
 use crate::features::task_groups::entities::task_group::{NewTaskGroup, TaskGroup};
 use crate::features::task_groups::error::TaskGroupError;
 
@@ -27,6 +28,7 @@ impl CreateTaskGroup {
             id: Uuid::now_v7(),
             user_id,
             name: task_group_name.to_owned(),
+            rules: GroupRules::default(),
         };
         Ok(self
             .postgres_task_group_source

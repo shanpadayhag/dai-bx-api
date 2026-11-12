@@ -1,8 +1,11 @@
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::actions::close_running_events::CloseRunningEvents;
 use crate::features::calendar_events::entities::calendar_event::ClosingScope;
+use crate::features::task_groups::actions::find_uncheck_cutoffs::FindUncheckCutoffs;
 use crate::features::task_groups::actions::lock_task_group::LockTaskGroup;
 use crate::features::task_groups::entities::task_group::TaskGroupDetails;
 use crate::features::tasks::data_sources::postgres::task_source::{PostgresTaskSource, TaskPlace};
@@ -22,6 +25,7 @@ pub struct MoveTask<'a> {
     db_pool: &'a PgPool,
     lock_task_group: LockTaskGroup,
     close_running_events: CloseRunningEvents,
+    find_uncheck_cutoffs: FindUncheckCutoffs,
     postgres_task_source: PostgresTaskSource,
 }
 
@@ -31,6 +35,7 @@ impl<'a> MoveTask<'a> {
             db_pool,
             lock_task_group: LockTaskGroup::new(),
             close_running_events: CloseRunningEvents::new(),
+            find_uncheck_cutoffs: FindUncheckCutoffs::new(),
             postgres_task_source: PostgresTaskSource,
         }
     }
@@ -40,6 +45,8 @@ impl<'a> MoveTask<'a> {
         user_id: Uuid,
         task_id: Uuid,
         move_target: MoveTarget,
+        request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
     ) -> Result<MovedTask, TaskError> {
         let mut move_transaction = self.db_pool.begin().await?;
         let source_group_id = self
@@ -106,10 +113,20 @@ impl<'a> MoveTask<'a> {
                 target_place,
             )
             .await?;
+        let uncheck_cutoffs = self
+            .find_uncheck_cutoffs
+            .execute(&mut *move_transaction, user_id, request_time_zone, now)
+            .await?;
+        let destination_cutoff_millis = uncheck_cutoffs.cutoff_millis_for(move_target.group_id);
         if let Some(parent_task_id) = move_target.parent_id
             && self
                 .postgres_task_source
-                .subtree_has_open_task(&mut *move_transaction, move_target.group_id, task_id)
+                .subtree_has_open_task(
+                    &mut *move_transaction,
+                    move_target.group_id,
+                    task_id,
+                    destination_cutoff_millis,
+                )
                 .await?
         {
             self.postgres_task_source
@@ -117,6 +134,7 @@ impl<'a> MoveTask<'a> {
                     &mut *move_transaction,
                     move_target.group_id,
                     parent_task_id,
+                    destination_cutoff_millis,
                 )
                 .await?;
         }
@@ -124,7 +142,11 @@ impl<'a> MoveTask<'a> {
             group: source_group_details,
             tasks: self
                 .postgres_task_source
-                .list_for_group(&mut *move_transaction, source_group_id)
+                .list_for_group(
+                    &mut *move_transaction,
+                    source_group_id,
+                    uncheck_cutoffs.cutoff_millis_for(source_group_id),
+                )
                 .await?,
         };
         let affected_groups = if move_target.group_id == source_group_id {
@@ -132,7 +154,11 @@ impl<'a> MoveTask<'a> {
         } else {
             let destination_count = self
                 .postgres_task_source
-                .count_for_group(&mut *move_transaction, move_target.group_id)
+                .count_for_group(
+                    &mut *move_transaction,
+                    move_target.group_id,
+                    destination_cutoff_millis,
+                )
                 .await?;
             vec![
                 left_group_tasks.affected_group(),

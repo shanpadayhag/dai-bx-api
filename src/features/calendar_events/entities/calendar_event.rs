@@ -116,7 +116,17 @@ pub struct CalendarEventChanges {
     pub starts_at: Option<UtcInstant>,
     pub ends_at: Option<UtcInstant>,
     pub time_zone_change: Option<Option<String>>,
-    pub repeat: Option<EventRepeat>,
+    pub repeat_change: Option<Option<EventRepeat>>,
+}
+
+impl CalendarEventChanges {
+    pub fn new_repeat(&self) -> Option<&EventRepeat> {
+        self.repeat_change.as_ref().and_then(Option::as_ref)
+    }
+
+    pub fn stops_repeating(&self) -> bool {
+        matches!(self.repeat_change, Some(None))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -250,7 +260,8 @@ impl CalendarEvent {
                 if event_changes.title.is_some() {
                     return Err(invalid("a tracked event keeps its task's or card's name"));
                 }
-                if event_changes.time_zone_change.is_some() || event_changes.repeat.is_some() {
+                if event_changes.time_zone_change.is_some() || event_changes.repeat_change.is_some()
+                {
                     return Err(invalid(
                         "a tracked event shows in the calendar's zone and doesn't repeat",
                     ));
@@ -514,7 +525,7 @@ mod tests {
                     starts_at: Some(instant("2026-11-06T18:00:00Z")),
                     ends_at: Some(instant("2026-11-08T19:00:00Z")),
                     time_zone_change: Some(Some(String::from("Europe/London"))),
-                    repeat: None,
+                    repeat_change: None,
                 },
                 instant(NOW),
             )
@@ -705,13 +716,13 @@ mod tests {
                 ..CalendarEventChanges::default()
             },
             CalendarEventChanges {
-                repeat: Some(EventRepeat {
+                repeat_change: Some(Some(EventRepeat {
                     repeat_rule: serde_json::from_str(
                         r#"{"frequency":"daily","interval":1,"ends":{"never":true}}"#,
                     )
                     .expect("a valid rule"),
                     input_zone: utc_zone,
-                }),
+                })),
                 ..CalendarEventChanges::default()
             },
         ] {

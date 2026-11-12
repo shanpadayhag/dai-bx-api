@@ -1,5 +1,7 @@
 use uuid::Uuid;
 
+use crate::features::task_groups::entities::group_rules::GroupRules;
+use crate::features::task_groups::entities::group_timetable::GroupTimetable;
 use crate::features::task_groups::error::TaskGroupError;
 
 pub const TASK_GROUP_NAME_MAX_CHARACTERS: usize = 200;
@@ -13,6 +15,13 @@ pub struct TaskGroup {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduledTaskGroup {
+    pub task_group: TaskGroup,
+    pub rules: GroupRules,
+    pub timetable: GroupTimetable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskGroupDetails {
     pub id: Uuid,
     pub name: String,
@@ -23,6 +32,7 @@ pub struct NewTaskGroup {
     pub id: Uuid,
     pub user_id: Uuid,
     pub name: String,
+    pub rules: GroupRules,
 }
 
 pub fn validate_task_group_name(raw_name: &str) -> Result<String, TaskGroupError> {

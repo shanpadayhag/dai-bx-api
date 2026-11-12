@@ -1,6 +1,8 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::actions::build_board::BuildBoard;
 use crate::features::boards::entities::board::Board;
 use crate::features::calendar_events::actions::rename_tracked_events::RenameTrackedEvents;
@@ -35,6 +37,8 @@ impl<'a> UpdateCard<'a> {
         card_id: Uuid,
         card_changes: &CardChanges,
         renames_events: bool,
+        request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
     ) -> Result<Board, CardError> {
         let mut update_transaction = self.db_pool.begin().await?;
         let board_summary = self
@@ -70,7 +74,13 @@ impl<'a> UpdateCard<'a> {
         }
         let board = self
             .build_board
-            .execute(&mut update_transaction, board_summary)
+            .execute(
+                &mut update_transaction,
+                user_id,
+                board_summary,
+                request_time_zone,
+                now,
+            )
             .await?;
         update_transaction.commit().await?;
         Ok(board)

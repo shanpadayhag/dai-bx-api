@@ -1,6 +1,7 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::actions::build_board::BuildBoard;
 use crate::features::boards::entities::board::Board;
@@ -37,6 +38,7 @@ impl<'a> DeleteCard<'a> {
         &self,
         user_id: Uuid,
         card_id: Uuid,
+        request_time_zone: &RequestTimeZone,
         now: UtcInstant,
     ) -> Result<Board, CardError> {
         let mut delete_transaction = self.db_pool.begin().await?;
@@ -71,7 +73,13 @@ impl<'a> DeleteCard<'a> {
         }
         let board = self
             .build_board
-            .execute(&mut delete_transaction, board_summary)
+            .execute(
+                &mut delete_transaction,
+                user_id,
+                board_summary,
+                request_time_zone,
+                now,
+            )
             .await?;
         delete_transaction.commit().await?;
         Ok(board)

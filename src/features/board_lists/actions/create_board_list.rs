@@ -1,6 +1,8 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::board_lists::data_sources::postgres::board_list_source::PostgresBoardListSource;
 use crate::features::board_lists::entities::board_list::NewBoardList;
 use crate::features::board_lists::error::BoardListError;
@@ -30,6 +32,8 @@ impl<'a> CreateBoardList<'a> {
         user_id: Uuid,
         board_id: Uuid,
         list_name: &str,
+        request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
     ) -> Result<Board, BoardListError> {
         let mut create_transaction = self.db_pool.begin().await?;
         let board_summary = self
@@ -49,7 +53,13 @@ impl<'a> CreateBoardList<'a> {
             .await?;
         let board = self
             .build_board
-            .execute(&mut create_transaction, board_summary)
+            .execute(
+                &mut create_transaction,
+                user_id,
+                board_summary,
+                request_time_zone,
+                now,
+            )
             .await?;
         create_transaction.commit().await?;
         Ok(board)

@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FILTER (\n                          WHERE (completed_at >= coalesce(to_timestamp($2::bigint / 1000.0), '-infinity'))\n                                IS NOT TRUE\n                      ) AS \"open_task_count!\",\n                      count(*) AS \"task_count!\"\n               FROM tasks\n               WHERE group_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "open_task_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "a48d088c4d489a2ada39dfa4f52bcf0f40b0cf1e01dd0e9fbab53804c331a2a7"
+}

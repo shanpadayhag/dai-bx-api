@@ -5,7 +5,9 @@ use uuid::Uuid;
 
 use crate::core::error::AppError;
 use crate::core::json_field::deserialize_present_field;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::tasks::actions::update_task::UpdateTask;
 use crate::features::tasks::entities::task::{
     TaskChanges, validate_estimate_minutes, validate_task_name,
@@ -26,6 +28,7 @@ pub struct PatchTaskRequest {
 pub async fn patch_task(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(task_id_text): Path<String>,
     Json(patch_request): Json<PatchTaskRequest>,
 ) -> Result<Json<GroupTasksResponse>, AppError> {
@@ -47,6 +50,8 @@ pub async fn patch_task(
             task_id,
             &task_changes,
             patch_request.rename_events,
+            &request_time_zone,
+            UtcInstant::now(),
         )
         .await?;
     Ok(Json(group_tasks.into()))

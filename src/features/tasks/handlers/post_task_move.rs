@@ -4,7 +4,9 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::core::error::AppError;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::tasks::actions::move_task::{MoveTarget, MoveTask};
 use crate::features::tasks::responses::group_tasks_response::MovedTaskResponse;
 use crate::features::throttling::entities::write_session::WriteSession;
@@ -24,6 +26,7 @@ fn parse_id(id_text: &str) -> Result<Uuid, AppError> {
 pub async fn post_task_move(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(task_id_text): Path<String>,
     Json(move_request): Json<PostTaskMoveRequest>,
 ) -> Result<Json<MovedTaskResponse>, AppError> {
@@ -43,7 +46,13 @@ pub async fn post_task_move(
         position: i32::try_from(move_request.position).unwrap_or(i32::MAX),
     };
     let moved_task = MoveTask::new(&app_state.db_pool)
-        .execute(write_session.user_id, task_id, move_target)
+        .execute(
+            write_session.user_id,
+            task_id,
+            move_target,
+            &request_time_zone,
+            UtcInstant::now(),
+        )
         .await?;
     Ok(Json(moved_task.into()))
 }

@@ -4,7 +4,9 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::core::error::AppError;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::responses::board_response::BoardResponse;
 use crate::features::cards::actions::set_card_value::SetCardValue;
 use crate::features::cards::entities::card::validate_card_value;
@@ -24,6 +26,7 @@ pub struct PutCardValueRequest {
 pub async fn put_card_value(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path((card_id_text, property_id_text)): Path<(String, String)>,
     Json(put_request): Json<PutCardValueRequest>,
 ) -> Result<Json<BoardResponse>, AppError> {
@@ -40,6 +43,8 @@ pub async fn put_card_value(
             card_id,
             property_id,
             &card_value_content,
+            &request_time_zone,
+            UtcInstant::now(),
         )
         .await?;
     Ok(Json(board.into()))

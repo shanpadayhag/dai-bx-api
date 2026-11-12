@@ -9,7 +9,7 @@ use crate::features::calendar_events::entities::calendar_event::{
 use crate::features::cards::actions::find_card_title::FindCardTitle;
 use crate::features::cards::actions::fire_card_trigger::FireCardTrigger;
 use crate::features::cards::actions::lock_board_of_card::LockBoardOfCard;
-use crate::features::cards::entities::card_trigger::TriggerKind;
+use crate::features::cards::entities::card_trigger::TriggerEvent;
 use crate::features::tracking::error::TrackingError;
 
 pub struct StartCard<'a> {
@@ -62,7 +62,7 @@ impl<'a> StartCard<'a> {
                 &mut start_transaction,
                 user_id,
                 card_id,
-                TriggerKind::Started,
+                TriggerEvent::Started,
                 None,
                 now,
             )
@@ -75,6 +75,7 @@ impl<'a> StartCard<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::request_time_zone::RequestTimeZone;
     use crate::features::board_lists::actions::create_board_list::CreateBoardList;
     use crate::features::boards::actions::create_board::CreateBoard;
     use crate::features::cards::actions::create_card::CreateCard;
@@ -86,12 +87,24 @@ mod tests {
             .await
             .expect("the board should be created");
         let board = CreateBoardList::new(db_pool)
-            .execute(user_id, board.board.id, "Doing")
+            .execute(
+                user_id,
+                board.board.id,
+                "Doing",
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the list should be created");
         let list_id = board.lists.first().expect("the list should be listed").id;
         let board = CreateCard::new(db_pool)
-            .execute(user_id, list_id, "Plan")
+            .execute(
+                user_id,
+                list_id,
+                "Plan",
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the card should be created");
         board.cards.first().expect("the card should be listed").id

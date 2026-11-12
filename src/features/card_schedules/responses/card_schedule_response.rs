@@ -10,6 +10,7 @@ use crate::features::card_schedules::entities::card_schedule::{
 pub struct ScheduleBlockResponse {
     pub minutes: i32,
     pub category_id: Option<String>,
+    pub time: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -51,6 +52,9 @@ impl From<ScheduleBlock> for ScheduleBlockResponse {
             category_id: schedule_block
                 .category_id
                 .map(|category_id| category_id.to_string()),
+            time: schedule_block
+                .start_time
+                .map(|start_time| start_time.strftime("%H:%M").to_string()),
         }
     }
 }

@@ -66,7 +66,7 @@ async fn changes_a_schedule_s_target_time_and_repeat(db_pool: PgPool) {
     assert_eq!(changed_schedule["repeat"]["interval"], 2);
     assert_eq!(
         changed_schedule["block"],
-        json!({ "minutes": 30, "categoryId": null })
+        json!({ "minutes": 30, "categoryId": null, "time": null })
     );
     assert_eq!(changed_schedule["nextRunAt"], "2030-01-08T07:00:00.000Z");
     assert_eq!(

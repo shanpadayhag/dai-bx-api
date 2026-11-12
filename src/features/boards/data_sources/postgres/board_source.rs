@@ -6,6 +6,7 @@ use crate::features::boards::entities::board::{
     BoardCard, BoardList, BoardProperty, BoardPropertyKind, BoardSummary, CardValue,
     CardValueContent, NewBoard, PropertyOption,
 };
+use crate::features::task_groups::entities::uncheck_cutoffs::UncheckCutoffs;
 
 #[derive(Default)]
 pub struct PostgresBoardSource;
@@ -144,6 +145,7 @@ impl PostgresBoardSource {
         &self,
         executor: impl PgExecutor<'_>,
         board_id: Uuid,
+        uncheck_cutoffs: &UncheckCutoffs,
     ) -> Result<Vec<BoardCard>, sqlx::Error> {
         let card_rows = sqlx::query!(
             r#"SELECT cards.id,
@@ -158,15 +160,24 @@ impl PostgresBoardSource {
                LEFT JOIN (
                    SELECT tasks.card_id,
                           count(*) AS linked_task_count,
-                          count(*) FILTER (WHERE tasks.completed_at IS NOT NULL) AS done_linked_task_count
+                          count(*) FILTER (
+                              WHERE (tasks.completed_at
+                                     >= coalesce(to_timestamp(uncheck_cutoffs.cutoff_millis / 1000.0),
+                                                 '-infinity')) IS TRUE
+                          ) AS done_linked_task_count
                    FROM tasks
                    JOIN cards AS linked_cards ON linked_cards.id = tasks.card_id
+                   LEFT JOIN unnest($2::uuid[], $3::bigint[])
+                        AS uncheck_cutoffs(group_id, cutoff_millis)
+                        ON uncheck_cutoffs.group_id = tasks.group_id
                    WHERE linked_cards.board_id = $1
                    GROUP BY tasks.card_id
                ) AS card_task_counts ON card_task_counts.card_id = cards.id
                WHERE cards.board_id = $1 AND cards.archived_at IS NULL
                ORDER BY cards.list_id, cards.position"#,
             board_id,
+            &uncheck_cutoffs.group_ids,
+            &uncheck_cutoffs.cutoff_millis,
         )
         .fetch_all(executor)
         .await?;

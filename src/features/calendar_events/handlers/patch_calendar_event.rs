@@ -31,7 +31,8 @@ pub struct PatchCalendarEventRequest {
     pub input_zone: Option<String>,
     #[serde(default, deserialize_with = "deserialize_present_field")]
     pub time_zone: Option<Option<String>>,
-    pub repeat: Option<RepeatRule>,
+    #[serde(default, deserialize_with = "deserialize_present_field")]
+    pub repeat: Option<Option<RepeatRule>>,
 }
 
 fn require_input_zone(
@@ -99,13 +100,17 @@ impl PatchCalendarEventRequest {
                         .transpose()
                 })
                 .transpose()?,
-            repeat: self
+            repeat_change: self
                 .repeat
                 .map(|repeat_rule| {
-                    require_input_zone(input_zone.as_ref()).map(|input_zone| EventRepeat {
-                        repeat_rule,
-                        input_zone: input_zone.clone(),
-                    })
+                    repeat_rule
+                        .map(|repeat_rule| {
+                            require_input_zone(input_zone.as_ref()).map(|input_zone| EventRepeat {
+                                repeat_rule,
+                                input_zone: input_zone.clone(),
+                            })
+                        })
+                        .transpose()
                 })
                 .transpose()?,
         };

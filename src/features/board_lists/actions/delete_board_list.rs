@@ -1,6 +1,7 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::board_lists::actions::lock_board_of_list::LockBoardOfList;
 use crate::features::board_lists::data_sources::postgres::board_list_source::PostgresBoardListSource;
@@ -40,6 +41,7 @@ impl<'a> DeleteBoardList<'a> {
         &self,
         user_id: Uuid,
         list_id: Uuid,
+        request_time_zone: &RequestTimeZone,
         now: UtcInstant,
     ) -> Result<Board, BoardListError> {
         let mut delete_transaction = self.db_pool.begin().await?;
@@ -75,7 +77,13 @@ impl<'a> DeleteBoardList<'a> {
             .await?;
         let board = self
             .build_board
-            .execute(&mut delete_transaction, board_summary)
+            .execute(
+                &mut delete_transaction,
+                user_id,
+                board_summary,
+                request_time_zone,
+                now,
+            )
             .await?;
         delete_transaction.commit().await?;
         Ok(board)

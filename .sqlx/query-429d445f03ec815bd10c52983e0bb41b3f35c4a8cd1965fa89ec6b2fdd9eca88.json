@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT task_groups.id,\n                      task_groups.name,\n                      coalesce(group_task_counts.open_task_count, 0) AS \"open_task_count!\",\n                      coalesce(group_task_counts.task_count, 0) AS \"task_count!\"\n               FROM task_groups\n               LEFT JOIN (\n                   SELECT tasks.group_id,\n                          count(*) FILTER (\n                              WHERE tasks.completed_at IS NULL\n                                 OR tasks.completed_at\n                                    < coalesce(to_timestamp(uncheck_cutoffs.cutoff_millis / 1000.0),\n                                               '-infinity')\n                          ) AS open_task_count,\n                          count(*) AS task_count\n                   FROM tasks\n                   LEFT JOIN unnest($3::uuid[], $4::bigint[])\n                        AS uncheck_cutoffs(group_id, cutoff_millis)\n                        ON uncheck_cutoffs.group_id = tasks.group_id\n                   WHERE tasks.user_id = $1\n                   GROUP BY tasks.group_id\n               ) AS group_task_counts ON group_task_counts.group_id = task_groups.id\n               WHERE task_groups.user_id = $1\n                 AND ($2::uuid IS NULL OR task_groups.id = $2)\n               ORDER BY task_groups.created_at DESC, task_groups.id DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "task_groups",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "task_groups",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "open_task_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "task_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray",
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "429d445f03ec815bd10c52983e0bb41b3f35c4a8cd1965fa89ec6b2fdd9eca88"
+}

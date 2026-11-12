@@ -4,7 +4,9 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::core::error::AppError;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::board_properties::actions::create_property_option::CreatePropertyOption;
 use crate::features::board_properties::entities::board_property::validate_option_draft;
 use crate::features::boards::responses::board_response::BoardResponse;
@@ -20,13 +22,20 @@ pub struct PostPropertyOptionsRequest {
 pub async fn post_property_options(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(property_id_text): Path<String>,
     Json(post_request): Json<PostPropertyOptionsRequest>,
 ) -> Result<Json<BoardResponse>, AppError> {
     let property_id = Uuid::parse_str(&property_id_text).map_err(|_| AppError::NotFound)?;
     let option_draft = validate_option_draft(&post_request.name, post_request.color.as_deref())?;
     let board = CreatePropertyOption::new(&app_state.db_pool)
-        .execute(write_session.user_id, property_id, &option_draft)
+        .execute(
+            write_session.user_id,
+            property_id,
+            &option_draft,
+            &request_time_zone,
+            UtcInstant::now(),
+        )
         .await?;
     Ok(Json(board.into()))
 }

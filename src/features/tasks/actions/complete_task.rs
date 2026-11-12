@@ -1,6 +1,7 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::tasks::actions::complete_task_in_transaction::CompleteTaskInTransaction;
 use crate::features::tasks::entities::task::GroupTasks;
@@ -23,12 +24,19 @@ impl<'a> CompleteTask<'a> {
         &self,
         user_id: Uuid,
         task_id: Uuid,
+        request_time_zone: &RequestTimeZone,
         now: UtcInstant,
     ) -> Result<GroupTasks, TaskError> {
         let mut complete_transaction = self.db_pool.begin().await?;
         let group_tasks = self
             .complete_task_in_transaction
-            .execute(&mut complete_transaction, user_id, task_id, now)
+            .execute(
+                &mut complete_transaction,
+                user_id,
+                task_id,
+                request_time_zone,
+                now,
+            )
             .await?;
         complete_transaction.commit().await?;
         Ok(group_tasks)

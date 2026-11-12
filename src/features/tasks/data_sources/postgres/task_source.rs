@@ -1,6 +1,7 @@
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
+use crate::features::task_groups::entities::uncheck_cutoffs::UncheckCutoffs;
 use crate::features::tasks::entities::task::{
     CompletedLinkedTask, NewTask, Task, TaskCard, TaskChanges, TrackableTask,
 };
@@ -25,13 +26,14 @@ impl PostgresTaskSource {
         &self,
         executor: impl PgExecutor<'_>,
         task_group_id: Uuid,
+        uncheck_cutoff_millis: Option<i64>,
     ) -> Result<Vec<Task>, sqlx::Error> {
         let task_rows = sqlx::query!(
             r#"SELECT tasks.id,
                       tasks.parent_id,
                       tasks.position,
                       tasks.name,
-                      tasks.completed_at IS NOT NULL AS "is_done!",
+                      (tasks.completed_at >= coalesce(to_timestamp($2::bigint / 1000.0), '-infinity')) IS TRUE AS "is_done!",
                       tasks.estimate_minutes,
                       cards.id AS "card_id?",
                       cards.title AS "card_title?",
@@ -44,6 +46,7 @@ impl PostgresTaskSource {
                WHERE tasks.group_id = $1
                ORDER BY tasks.parent_id NULLS FIRST, tasks.position, tasks.id"#,
             task_group_id,
+            uncheck_cutoff_millis,
         )
         .fetch_all(executor)
         .await?;
@@ -108,17 +111,23 @@ impl PostgresTaskSource {
         executor: impl PgExecutor<'_>,
         user_id: Uuid,
         task_id: Uuid,
+        uncheck_cutoffs: &UncheckCutoffs,
     ) -> Result<Option<TrackableTask>, sqlx::Error> {
         sqlx::query_as!(
             TrackableTask,
-            r#"SELECT name,
-                      card_id,
-                      parent_id IS NULL AS "is_top_level!",
-                      completed_at IS NOT NULL AS "is_done!"
+            r#"SELECT tasks.name AS "name!",
+                      tasks.card_id,
+                      tasks.parent_id IS NULL AS "is_top_level!",
+                      (tasks.completed_at >= coalesce(to_timestamp(uncheck_cutoffs.cutoff_millis / 1000.0), '-infinity')) IS TRUE AS "is_done!"
                FROM tasks
-               WHERE id = $1 AND user_id = $2"#,
+               LEFT JOIN unnest($3::uuid[], $4::bigint[])
+                    AS uncheck_cutoffs(group_id, cutoff_millis)
+                    ON uncheck_cutoffs.group_id = tasks.group_id
+               WHERE tasks.id = $1 AND tasks.user_id = $2"#,
             task_id,
             user_id,
+            &uncheck_cutoffs.group_ids,
+            &uncheck_cutoffs.cutoff_millis,
         )
         .fetch_optional(executor)
         .await
@@ -191,6 +200,7 @@ impl PostgresTaskSource {
         executor: impl PgExecutor<'_>,
         task_group_id: Uuid,
         task_id: Uuid,
+        uncheck_cutoff_millis: Option<i64>,
     ) -> Result<Vec<CompletedLinkedTask>, sqlx::Error> {
         sqlx::query_as!(
             CompletedLinkedTask,
@@ -206,7 +216,9 @@ impl PostgresTaskSource {
              completed_tasks AS (
                  UPDATE tasks
                  SET completed_at = now(), updated_at = now()
-                 WHERE id IN (SELECT id FROM task_subtree) AND completed_at IS NULL
+                 WHERE id IN (SELECT id FROM task_subtree)
+                   AND (completed_at >= coalesce(to_timestamp($3::bigint / 1000.0), '-infinity'))
+                       IS NOT TRUE
                  RETURNING id, card_id, name
              )
              SELECT id AS task_id, card_id AS "card_id!", name
@@ -214,6 +226,7 @@ impl PostgresTaskSource {
              WHERE card_id IS NOT NULL"#,
             task_id,
             task_group_id,
+            uncheck_cutoff_millis,
         )
         .fetch_all(executor)
         .await
@@ -263,6 +276,7 @@ impl PostgresTaskSource {
         executor: impl PgExecutor<'_>,
         task_group_id: Uuid,
         task_id: Uuid,
+        uncheck_cutoff_millis: Option<i64>,
     ) -> Result<(), sqlx::Error> {
         sqlx::query!(
             "WITH RECURSIVE task_ancestry AS (
@@ -276,9 +290,12 @@ impl PostgresTaskSource {
              )
              UPDATE tasks
              SET completed_at = NULL, updated_at = now()
-             WHERE id IN (SELECT id FROM task_ancestry) AND completed_at IS NOT NULL",
+             WHERE id IN (SELECT id FROM task_ancestry)
+               AND (completed_at >= coalesce(to_timestamp($3::bigint / 1000.0), '-infinity'))
+                   IS TRUE",
             task_id,
             task_group_id,
+            uncheck_cutoff_millis,
         )
         .execute(executor)
         .await?;
@@ -411,6 +428,7 @@ impl PostgresTaskSource {
         executor: impl PgExecutor<'_>,
         task_group_id: Uuid,
         subtree_root_id: Uuid,
+        uncheck_cutoff_millis: Option<i64>,
     ) -> Result<bool, sqlx::Error> {
         sqlx::query_scalar!(
             r#"WITH RECURSIVE task_subtree AS (
@@ -420,9 +438,15 @@ impl PostgresTaskSource {
                    FROM tasks
                    JOIN task_subtree ON tasks.parent_id = task_subtree.id
                )
-               SELECT EXISTS (SELECT 1 FROM task_subtree WHERE completed_at IS NULL) AS "has_open_task!""#,
+               SELECT EXISTS (
+                   SELECT 1
+                   FROM task_subtree
+                   WHERE (completed_at >= coalesce(to_timestamp($3::bigint / 1000.0), '-infinity'))
+                         IS NOT TRUE
+               ) AS "has_open_task!""#,
             subtree_root_id,
             task_group_id,
+            uncheck_cutoff_millis,
         )
         .fetch_one(executor)
         .await
@@ -496,14 +520,19 @@ impl PostgresTaskSource {
         &self,
         executor: impl PgExecutor<'_>,
         task_group_id: Uuid,
+        uncheck_cutoff_millis: Option<i64>,
     ) -> Result<GroupTaskCount, sqlx::Error> {
         sqlx::query_as!(
             GroupTaskCount,
-            r#"SELECT count(*) FILTER (WHERE completed_at IS NULL) AS "open_task_count!",
+            r#"SELECT count(*) FILTER (
+                          WHERE (completed_at >= coalesce(to_timestamp($2::bigint / 1000.0), '-infinity'))
+                                IS NOT TRUE
+                      ) AS "open_task_count!",
                       count(*) AS "task_count!"
                FROM tasks
                WHERE group_id = $1"#,
             task_group_id,
+            uncheck_cutoff_millis,
         )
         .fetch_one(executor)
         .await
@@ -582,7 +611,7 @@ pub mod tests {
             seed_task(&db_pool, owner_id, task_group.id, Some(top_level_task_id)).await;
         let done_task_id = seed_task(&db_pool, owner_id, task_group.id, None).await;
         PostgresTaskSource
-            .complete_task_and_descendants(&db_pool, task_group.id, done_task_id)
+            .complete_task_and_descendants(&db_pool, task_group.id, done_task_id, None)
             .await
             .expect("completing should run");
 
@@ -590,14 +619,19 @@ pub mod tests {
         for task_id in [top_level_task_id, subtask_id, done_task_id] {
             trackable_tasks.push(
                 PostgresTaskSource
-                    .find_trackable(&db_pool, owner_id, task_id)
+                    .find_trackable(&db_pool, owner_id, task_id, &UncheckCutoffs::default())
                     .await
                     .expect("the read should run")
                     .expect("the task should be found"),
             );
         }
         let foreign_read = PostgresTaskSource
-            .find_trackable(&db_pool, other_person_id, top_level_task_id)
+            .find_trackable(
+                &db_pool,
+                other_person_id,
+                top_level_task_id,
+                &UncheckCutoffs::default(),
+            )
             .await
             .expect("the read should run");
 
@@ -632,7 +666,7 @@ pub mod tests {
         seed_task(&db_pool, owner_id, task_group.id, Some(first_task_id)).await;
 
         let listed_places: Vec<(Option<Uuid>, i32)> = PostgresTaskSource
-            .list_for_group(&db_pool, task_group.id)
+            .list_for_group(&db_pool, task_group.id, None)
             .await
             .expect("listing should run")
             .into_iter()
@@ -679,18 +713,18 @@ pub mod tests {
         let neighbour_task_id = seed_task(&db_pool, owner_id, task_group.id, None).await;
         for done_task_id in [top_task_id, neighbour_task_id] {
             PostgresTaskSource
-                .complete_task_and_descendants(&db_pool, task_group.id, done_task_id)
+                .complete_task_and_descendants(&db_pool, task_group.id, done_task_id, None)
                 .await
                 .expect("completing should run");
         }
 
         PostgresTaskSource
-            .reopen_task_and_ancestors(&db_pool, task_group.id, middle_task_id)
+            .reopen_task_and_ancestors(&db_pool, task_group.id, middle_task_id, None)
             .await
             .expect("reopening should run");
 
         let open_task_ids: Vec<Uuid> = PostgresTaskSource
-            .list_for_group(&db_pool, task_group.id)
+            .list_for_group(&db_pool, task_group.id, None)
             .await
             .expect("listing should run")
             .into_iter()
@@ -711,12 +745,12 @@ pub mod tests {
         let neighbour_task_id = seed_task(&db_pool, owner_id, task_group.id, None).await;
 
         PostgresTaskSource
-            .complete_task_and_descendants(&db_pool, task_group.id, middle_task_id)
+            .complete_task_and_descendants(&db_pool, task_group.id, middle_task_id, None)
             .await
             .expect("completing should run");
 
         let done_task_ids: Vec<Uuid> = PostgresTaskSource
-            .list_for_group(&db_pool, task_group.id)
+            .list_for_group(&db_pool, task_group.id, None)
             .await
             .expect("listing should run")
             .into_iter()
@@ -748,7 +782,7 @@ pub mod tests {
             .expect("closing the gap should run");
 
         let remaining_positions: Vec<i32> = task_source
-            .list_for_group(&db_pool, task_group.id)
+            .list_for_group(&db_pool, task_group.id, None)
             .await
             .expect("listing should run")
             .into_iter()
@@ -793,7 +827,7 @@ pub mod tests {
         let neighbour_task_id = seed_task(&db_pool, owner_id, task_group.id, None).await;
         let task_source = PostgresTaskSource;
         task_source
-            .complete_task_and_descendants(&db_pool, task_group.id, middle_task_id)
+            .complete_task_and_descendants(&db_pool, task_group.id, middle_task_id, None)
             .await
             .expect("completing should run");
 
@@ -818,13 +852,13 @@ pub mod tests {
         );
         assert!(
             task_source
-                .subtree_has_open_task(&db_pool, task_group.id, top_task_id)
+                .subtree_has_open_task(&db_pool, task_group.id, top_task_id, None)
                 .await
                 .expect("the check should run")
         );
         assert!(
             !task_source
-                .subtree_has_open_task(&db_pool, task_group.id, middle_task_id)
+                .subtree_has_open_task(&db_pool, task_group.id, middle_task_id, None)
                 .await
                 .expect("the check should run")
         );
@@ -860,7 +894,7 @@ pub mod tests {
 
         let ordered_task_ids: Vec<Uuid> = {
             let mut listed_tasks = task_source
-                .list_for_group(&db_pool, task_group.id)
+                .list_for_group(&db_pool, task_group.id, None)
                 .await
                 .expect("listing should run");
             listed_tasks.sort_by_key(|task| task.position);
@@ -879,7 +913,7 @@ pub mod tests {
         );
         assert_eq!(
             task_source
-                .count_for_group(&db_pool, task_group.id)
+                .count_for_group(&db_pool, task_group.id, None)
                 .await
                 .expect("counting should run"),
             GroupTaskCount {

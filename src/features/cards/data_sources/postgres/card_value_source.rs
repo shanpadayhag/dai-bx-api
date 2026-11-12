@@ -88,11 +88,13 @@ impl PostgresCardValueSource {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::request_time_zone::RequestTimeZone;
+    use crate::core::utc_instant::UtcInstant;
     use sqlx::PgPool;
 
     use super::*;
     use crate::features::board_properties::actions::create_board_property::CreateBoardProperty;
-    use crate::features::board_properties::entities::board_property::OptionDraft;
+    use crate::features::board_properties::entities::board_property::{OptionDraft, PropertyDraft};
     use crate::features::cards::data_sources::postgres::card_source::tests::{
         seed_board_with_lists, seed_card, seed_user_id,
     };
@@ -119,7 +121,17 @@ mod tests {
                 })
                 .collect();
             CreateBoardProperty::new(db_pool)
-                .execute(user_id, board_id, property_name, kind, &option_drafts)
+                .execute(
+                    user_id,
+                    board_id,
+                    &PropertyDraft {
+                        name: property_name.to_owned(),
+                        kind,
+                        option_drafts,
+                    },
+                    &RequestTimeZone::default(),
+                    UtcInstant::now(),
+                )
                 .await
                 .expect("the property should be created");
         }

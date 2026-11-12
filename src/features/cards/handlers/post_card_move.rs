@@ -4,6 +4,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::core::error::AppError;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::responses::board_response::BoardResponse;
@@ -25,6 +26,7 @@ fn parse_id(id_text: &str) -> Result<Uuid, AppError> {
 pub async fn post_card_move(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(card_id_text): Path<String>,
     Json(move_request): Json<PostCardMoveRequest>,
 ) -> Result<Json<BoardResponse>, AppError> {
@@ -38,6 +40,7 @@ pub async fn post_card_move(
             write_session.user_id,
             card_id,
             requested_place,
+            &request_time_zone,
             UtcInstant::now(),
         )
         .await?;

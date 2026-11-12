@@ -1,5 +1,7 @@
 use uuid::Uuid;
 
+use crate::features::task_groups::entities::uncheck_cutoffs::UncheckCutoffs;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TriggerKind {
     Started,
@@ -11,6 +13,21 @@ impl TriggerKind {
         match self {
             Self::Started => "started",
             Self::Finished => "finished",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TriggerEvent<'a> {
+    Started,
+    Finished { uncheck_cutoffs: &'a UncheckCutoffs },
+}
+
+impl TriggerEvent<'_> {
+    pub fn kind(self) -> TriggerKind {
+        match self {
+            Self::Started => TriggerKind::Started,
+            Self::Finished { .. } => TriggerKind::Finished,
         }
     }
 }

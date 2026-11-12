@@ -1,15 +1,17 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::board_properties::data_sources::postgres::board_property_source::PostgresBoardPropertySource;
 use crate::features::board_properties::data_sources::postgres::property_option_source::PostgresPropertyOptionSource;
 use crate::features::board_properties::entities::board_property::{
-    BOARD_PROPERTY_LIMIT, NameSave, NewBoardProperty, NewPropertyOption, OptionDraft,
+    BOARD_PROPERTY_LIMIT, NameSave, NewBoardProperty, NewPropertyOption, PropertyDraft,
 };
 use crate::features::board_properties::error::BoardPropertyError;
 use crate::features::boards::actions::build_board::BuildBoard;
 use crate::features::boards::actions::lock_board::LockBoard;
-use crate::features::boards::entities::board::{Board, BoardPropertyKind};
+use crate::features::boards::entities::board::Board;
 
 pub struct CreateBoardProperty<'a> {
     db_pool: &'a PgPool,
@@ -34,9 +36,9 @@ impl<'a> CreateBoardProperty<'a> {
         &self,
         user_id: Uuid,
         board_id: Uuid,
-        property_name: &str,
-        kind: BoardPropertyKind,
-        option_drafts: &[OptionDraft],
+        property_draft: &PropertyDraft,
+        request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
     ) -> Result<Board, BoardPropertyError> {
         let mut create_transaction = self.db_pool.begin().await?;
         let board_summary = self
@@ -61,16 +63,17 @@ impl<'a> CreateBoardProperty<'a> {
                     id: property_id,
                     user_id,
                     board_id,
-                    name: property_name.to_owned(),
-                    kind,
+                    name: property_draft.name.clone(),
+                    kind: property_draft.kind,
                 },
             )
             .await?;
         if property_save == NameSave::NameTaken {
             return Err(BoardPropertyError::PropertyNameTaken);
         }
-        if !option_drafts.is_empty() {
-            let new_property_options: Vec<NewPropertyOption> = option_drafts
+        if !property_draft.option_drafts.is_empty() {
+            let new_property_options: Vec<NewPropertyOption> = property_draft
+                .option_drafts
                 .iter()
                 .map(|option_draft| NewPropertyOption {
                     id: Uuid::now_v7(),
@@ -95,7 +98,13 @@ impl<'a> CreateBoardProperty<'a> {
         }
         let board = self
             .build_board
-            .execute(&mut create_transaction, board_summary)
+            .execute(
+                &mut create_transaction,
+                user_id,
+                board_summary,
+                request_time_zone,
+                now,
+            )
             .await?;
         create_transaction.commit().await?;
         Ok(board)

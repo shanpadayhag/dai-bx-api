@@ -1,6 +1,8 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::actions::build_board::BuildBoard;
 use crate::features::boards::entities::board::{Board, CardValueContent};
 use crate::features::cards::actions::lock_board_of_card::LockBoardOfCard;
@@ -33,6 +35,8 @@ impl<'a> SetCardValue<'a> {
         card_id: Uuid,
         property_id: Uuid,
         card_value_content: &CardValueContent,
+        request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
     ) -> Result<Board, CardError> {
         let mut set_transaction = self.db_pool.begin().await?;
         let board_summary = self
@@ -61,7 +65,13 @@ impl<'a> SetCardValue<'a> {
         }
         let board = self
             .build_board
-            .execute(&mut set_transaction, board_summary)
+            .execute(
+                &mut set_transaction,
+                user_id,
+                board_summary,
+                request_time_zone,
+                now,
+            )
             .await?;
         set_transaction.commit().await?;
         Ok(board)

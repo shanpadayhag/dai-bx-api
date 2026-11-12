@@ -4,6 +4,7 @@ mod calendar_schema;
 mod card_schedules_schema;
 mod card_triggers_schema;
 mod data_api_exposure;
+mod group_schedules_schema;
 mod invite_operator_role;
 mod purge_expired_auth_data;
 mod support;

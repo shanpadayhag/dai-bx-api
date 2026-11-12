@@ -1,6 +1,8 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::board_properties::actions::lock_board_of_option::LockBoardOfOption;
 use crate::features::board_properties::data_sources::postgres::property_option_source::PostgresPropertyOptionSource;
 use crate::features::board_properties::error::BoardPropertyError;
@@ -28,6 +30,8 @@ impl<'a> DeletePropertyOption<'a> {
         &self,
         user_id: Uuid,
         option_id: Uuid,
+        request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
     ) -> Result<Board, BoardPropertyError> {
         let mut delete_transaction = self.db_pool.begin().await?;
         let board_summary = self
@@ -61,7 +65,13 @@ impl<'a> DeletePropertyOption<'a> {
             .await?;
         let board = self
             .build_board
-            .execute(&mut delete_transaction, board_summary)
+            .execute(
+                &mut delete_transaction,
+                user_id,
+                board_summary,
+                request_time_zone,
+                now,
+            )
             .await?;
         delete_transaction.commit().await?;
         Ok(board)

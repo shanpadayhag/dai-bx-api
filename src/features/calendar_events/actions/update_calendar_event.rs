@@ -39,7 +39,7 @@ impl<'a> UpdateCalendarEvent<'a> {
             .filter(|current_event| current_event.series.is_none())
             .ok_or(CalendarEventError::NotFound)?;
         let changed_event = current_event.apply_changes(event_changes, UtcInstant::now())?;
-        let updated_event = match &event_changes.repeat {
+        let updated_event = match event_changes.new_repeat() {
             Some(event_repeat) => {
                 self.turn_into_series(
                     &mut update_transaction,
@@ -148,7 +148,7 @@ mod tests {
                 event_id,
                 &CalendarEventChanges {
                     title: Some(String::from("Swim")),
-                    repeat: Some(daily_repeat()),
+                    repeat_change: Some(Some(daily_repeat())),
                     ..CalendarEventChanges::default()
                 },
             )
@@ -180,13 +180,13 @@ mod tests {
                 user_id,
                 event_id,
                 &CalendarEventChanges {
-                    repeat: Some(EventRepeat {
+                    repeat_change: Some(Some(EventRepeat {
                         repeat_rule: serde_json::from_str(
                             r#"{"frequency":"daily","interval":1,"ends":{"onDate":"2026-11-01"}}"#,
                         )
                         .expect("a valid rule"),
                         ..daily_repeat()
-                    }),
+                    })),
                     ..CalendarEventChanges::default()
                 },
             )

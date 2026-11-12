@@ -2,6 +2,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::core::utc_instant::UtcInstant;
+use crate::features::calendar_events::actions::cut_off_series::CutOffSeries;
 use crate::features::calendar_events::data_sources::postgres::calendar_event_source::PostgresCalendarEventSource;
 use crate::features::calendar_events::data_sources::postgres::event_series_source::PostgresEventSeriesSource;
 use crate::features::calendar_events::entities::calendar_event::{
@@ -15,6 +16,7 @@ use crate::features::calendar_events::error::CalendarEventError;
 
 pub struct ChangeSeriesOccurrence<'a> {
     db_pool: &'a PgPool,
+    cut_off_series: CutOffSeries,
     postgres_calendar_event_source: PostgresCalendarEventSource,
     postgres_event_series_source: PostgresEventSeriesSource,
 }
@@ -53,6 +55,7 @@ impl<'a> ChangeSeriesOccurrence<'a> {
     pub fn new(db_pool: &'a PgPool) -> Self {
         Self {
             db_pool,
+            cut_off_series: CutOffSeries::new(),
             postgres_calendar_event_source: PostgresCalendarEventSource,
             postgres_event_series_source: PostgresEventSeriesSource,
         }
@@ -89,9 +92,21 @@ impl<'a> ChangeSeriesOccurrence<'a> {
                 .as_ref()
                 .map_or(original_start, |override_event| override_event.starts_at),
         };
-        let changed_occurrence = match series
-            .widened_scope(occurrence_request.occurrence_scope, original_start)
-        {
+        let widened_scope =
+            series.widened_scope(occurrence_request.occurrence_scope, original_start);
+        let changed_occurrence = match widened_scope {
+            OccurrenceScope::Following | OccurrenceScope::All
+                if occurrence_request.event_changes.stops_repeating() =>
+            {
+                self.stop_repeating(
+                    &mut change_transaction,
+                    &series_target,
+                    override_event,
+                    occurrence_request.event_changes,
+                    widened_scope,
+                )
+                .await?
+            }
             OccurrenceScope::This => {
                 self.change_this(
                     &mut change_transaction,
@@ -114,6 +129,65 @@ impl<'a> ChangeSeriesOccurrence<'a> {
         Ok(changed_occurrence)
     }
 
+    async fn stop_repeating(
+        &self,
+        change_transaction: &mut Transaction<'_, Postgres>,
+        series_target: &SeriesTarget<'_>,
+        override_event: Option<CalendarEvent>,
+        event_changes: &CalendarEventChanges,
+        widened_scope: OccurrenceScope,
+    ) -> Result<CalendarEvent, CalendarEventError> {
+        let user_id = series_target.user_id;
+        let series = series_target.series;
+        let changed_event = override_event
+            .unwrap_or_else(|| series.occurrence_at(series_target.original_start))
+            .apply_changes(event_changes, UtcInstant::now())?;
+        if widened_scope == OccurrenceScope::All {
+            self.postgres_event_series_source
+                .delete(&mut **change_transaction, user_id, series.id)
+                .await?;
+        } else {
+            self.cut_off_series
+                .execute(
+                    change_transaction,
+                    user_id,
+                    series,
+                    series_target.original_start,
+                )
+                .await?;
+        }
+        let plain_event_id = Uuid::now_v7();
+        let event_write = self
+            .postgres_calendar_event_source
+            .insert(
+                &mut **change_transaction,
+                &NewCalendarEvent {
+                    id: plain_event_id,
+                    user_id,
+                    kind: CalendarEventKind::Planned,
+                    title: changed_event.title,
+                    category_id: changed_event.category_id,
+                    task_id: None,
+                    card_id: None,
+                    starts_at: changed_event.starts_at,
+                    ends_at: changed_event.ends_at,
+                    finished_at: None,
+                    last_answered_at: None,
+                    time_zone: changed_event.time_zone,
+                    series_id: None,
+                    original_start: None,
+                },
+            )
+            .await?;
+        if event_write == EventWrite::UnknownLink {
+            return Err(CalendarEventError::NotFound);
+        }
+        self.postgres_calendar_event_source
+            .find_locked(&mut **change_transaction, user_id, plain_event_id)
+            .await?
+            .ok_or(CalendarEventError::NotFound)
+    }
+
     async fn change_this(
         &self,
         change_transaction: &mut Transaction<'_, Postgres>,
@@ -121,7 +195,7 @@ impl<'a> ChangeSeriesOccurrence<'a> {
         override_event: Option<CalendarEvent>,
         event_changes: &CalendarEventChanges,
     ) -> Result<CalendarEvent, CalendarEventError> {
-        if event_changes.repeat.is_some() {
+        if event_changes.repeat_change.is_some() {
             return Err(CalendarEventError::Invalid(String::from(
                 "a repeat changes this and the following occurrences or all of them",
             )));
@@ -211,8 +285,7 @@ impl<'a> ChangeSeriesOccurrence<'a> {
                 changed_event: &changed_event,
                 is_start_changed: event_changes.starts_at.is_some(),
                 repeat_rule: event_changes
-                    .repeat
-                    .as_ref()
+                    .new_repeat()
                     .map(|event_repeat| event_repeat.repeat_rule.clone()),
                 used_occurrence_count: series.count_before(original_start),
                 series_zone: &series_zone,
@@ -302,8 +375,7 @@ impl<'a> ChangeSeriesOccurrence<'a> {
             changed_event: &changed_event,
             is_start_changed: event_changes.starts_at.is_some(),
             repeat_rule: event_changes
-                .repeat
-                .as_ref()
+                .new_repeat()
                 .map(|event_repeat| event_repeat.repeat_rule.clone()),
             used_occurrence_count: 0,
             series_zone: &series_zone,

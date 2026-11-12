@@ -1,4 +1,4 @@
-use jiff::civil::DateTime;
+use jiff::civil::{DateTime, Time};
 use uuid::Uuid;
 
 use crate::core::recurrence::{
@@ -45,18 +45,40 @@ impl ScheduleKind {
 pub struct ScheduleBlock {
     pub minutes: i32,
     pub category_id: Option<Uuid>,
+    pub start_time: Option<Time>,
+}
+
+fn parse_block_start_time(start_time_text: &str) -> Result<Time, ScheduleError> {
+    let is_hours_and_minutes =
+        start_time_text.len() == 5 && start_time_text.as_bytes().get(2) == Some(&b':');
+    is_hours_and_minutes
+        .then(|| start_time_text.parse::<Time>().ok())
+        .flatten()
+        .ok_or_else(|| invalid("a block start is a time like 10:00"))
 }
 
 impl ScheduleBlock {
-    pub fn new(minutes: i64, category_id: Option<Uuid>) -> Result<Self, ScheduleError> {
+    pub fn new(
+        minutes: i64,
+        category_id: Option<Uuid>,
+        start_time_text: Option<&str>,
+    ) -> Result<Self, ScheduleError> {
+        let start_time = start_time_text.map(parse_block_start_time).transpose()?;
         i32::try_from(minutes)
             .ok()
             .filter(|minutes| (BLOCK_MINUTES_MIN..=BLOCK_MINUTES_MAX).contains(minutes))
             .map(|minutes| Self {
                 minutes,
                 category_id,
+                start_time,
             })
             .ok_or_else(|| invalid("a calendar block is 15 minutes to 24 hours"))
+    }
+
+    fn local_start_on_run_day(self, run_local_start: DateTime) -> DateTime {
+        self.start_time.map_or(run_local_start, |start_time| {
+            run_local_start.date().to_datetime(start_time)
+        })
     }
 }
 
@@ -165,17 +187,23 @@ impl ScheduleTiming {
         first_run: UtcInstant,
     ) -> Option<NewScheduleBlock> {
         let schedule_zone = parse_time_zone(&self.time_zone)?;
+        let block_local_start =
+            schedule_block.local_start_on_run_day(to_local(first_run, &schedule_zone)?);
         match &self.repeat_rule {
-            None => Some(NewScheduleBlock::Event {
-                id: Uuid::now_v7(),
-                title: card_title.to_owned(),
-                category_id: schedule_block.category_id,
-                time_zone: self.time_zone.clone(),
-                starts_at: first_run,
-                ends_at: UtcInstant::from_unix_millis(
-                    first_run.unix_millis() + i64::from(schedule_block.minutes) * MILLIS_PER_MINUTE,
-                ),
-            }),
+            None => {
+                let block_starts_at = to_instant(block_local_start, &schedule_zone)?;
+                Some(NewScheduleBlock::Event {
+                    id: Uuid::now_v7(),
+                    title: card_title.to_owned(),
+                    category_id: schedule_block.category_id,
+                    time_zone: self.time_zone.clone(),
+                    starts_at: block_starts_at,
+                    ends_at: UtcInstant::from_unix_millis(
+                        block_starts_at.unix_millis()
+                            + i64::from(schedule_block.minutes) * MILLIS_PER_MINUTE,
+                    ),
+                })
+            }
             Some(repeat_rule) => {
                 let earlier_run_count = occurrences(
                     repeat_rule,
@@ -190,7 +218,7 @@ impl ScheduleTiming {
                     title: card_title.to_owned(),
                     category_id: schedule_block.category_id,
                     time_zone: self.time_zone.clone(),
-                    local_start: to_local(first_run, &schedule_zone)?,
+                    local_start: block_local_start,
                     duration_minutes: schedule_block.minutes,
                     repeat_rule: repeat_rule.after_used_occurrences(
                         i64::try_from(earlier_run_count).unwrap_or(i64::MAX),
@@ -216,6 +244,12 @@ impl ScheduleSettings {
                 ScheduleKind::Once => invalid("a one-time schedule needs a start in the future"),
                 ScheduleKind::Repeating => invalid("this repeat has no run left"),
             })
+    }
+
+    pub fn block_start_time_text(&self) -> Option<String> {
+        self.block
+            .and_then(|schedule_block| schedule_block.start_time)
+            .map(|start_time| start_time.strftime("%H:%M").to_string())
     }
 
     pub fn new_block(&self, card_title: &str, first_run: UtcInstant) -> Option<NewScheduleBlock> {
@@ -432,9 +466,9 @@ mod tests {
             );
         }
         assert!(ScheduleKind::parse("sometimes").is_err());
-        assert!(ScheduleBlock::new(14, None).is_err());
-        assert!(ScheduleBlock::new(1_441, None).is_err());
-        assert!(ScheduleBlock::new(15, None).is_ok());
+        assert!(ScheduleBlock::new(14, None, None).is_err());
+        assert!(ScheduleBlock::new(1_441, None, None).is_err());
+        assert!(ScheduleBlock::new(15, None, None).is_ok());
     }
 
     #[test]
@@ -475,6 +509,7 @@ mod tests {
             Some(ScheduleBlock {
                 minutes: 60,
                 category_id: None,
+                start_time: None,
             }),
         );
 
@@ -506,6 +541,32 @@ mod tests {
                 .new_block("Weekly review", instant("2026-11-23T10:00:00Z")),
             None
         );
+    }
+
+    #[test]
+    fn starts_a_block_at_its_own_time_on_the_run_s_day() {
+        let schedule_settings = settings_with(
+            monday_timing(r#"{"never":true}"#),
+            Some(ScheduleBlock::new(60, None, Some("20:30")).expect("a valid block")),
+        );
+
+        let Some(NewScheduleBlock::Series { local_start, .. }) =
+            schedule_settings.new_block("Weekly review", instant("2026-11-23T10:00:00Z"))
+        else {
+            panic!("a repeating schedule's block should be a series");
+        };
+
+        assert_eq!(
+            local_start,
+            "2026-11-23T20:30:00"
+                .parse::<DateTime>()
+                .expect("a local time")
+        );
+        assert_eq!(
+            schedule_settings.block_start_time_text(),
+            Some(String::from("20:30"))
+        );
+        assert!(ScheduleBlock::new(60, None, Some("8:30")).is_err());
     }
 
     #[test]

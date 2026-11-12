@@ -1,14 +1,19 @@
 use std::collections::HashMap;
 
 use sqlx::PgConnection;
+use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::data_sources::postgres::board_source::PostgresBoardSource;
 use crate::features::boards::entities::board::{Board, BoardSummary};
 use crate::features::boards::error::BoardError;
 use crate::features::card_schedules::actions::list_next_moves::ListNextMoves;
+use crate::features::task_groups::actions::find_uncheck_cutoffs::FindUncheckCutoffs;
 
 #[derive(Default)]
 pub struct BuildBoard {
+    find_uncheck_cutoffs: FindUncheckCutoffs,
     list_next_moves: ListNextMoves,
     postgres_board_source: PostgresBoardSource,
 }
@@ -16,6 +21,7 @@ pub struct BuildBoard {
 impl BuildBoard {
     pub fn new() -> Self {
         Self {
+            find_uncheck_cutoffs: FindUncheckCutoffs::new(),
             list_next_moves: ListNextMoves::new(),
             postgres_board_source: PostgresBoardSource,
         }
@@ -24,16 +30,23 @@ impl BuildBoard {
     pub async fn execute(
         &self,
         connection: &mut PgConnection,
+        user_id: Uuid,
         board_summary: BoardSummary,
+        request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
     ) -> Result<Board, BoardError> {
         let board_id = board_summary.id;
         let lists = self
             .postgres_board_source
             .list_lists(&mut *connection, board_id)
             .await?;
+        let uncheck_cutoffs = self
+            .find_uncheck_cutoffs
+            .execute(&mut *connection, user_id, request_time_zone, now)
+            .await?;
         let mut cards = self
             .postgres_board_source
-            .list_cards(&mut *connection, board_id)
+            .list_cards(&mut *connection, board_id, &uncheck_cutoffs)
             .await?;
         let card_values = self
             .postgres_board_source
@@ -204,7 +217,14 @@ mod tests {
             .expect("the group should be created");
         for task_name in ["Draft", "Review", "Send"] {
             AddTask::new(db_pool)
-                .execute(user_id, task_group.id, task_name, None)
+                .execute(
+                    user_id,
+                    task_group.id,
+                    task_name,
+                    None,
+                    &RequestTimeZone::default(),
+                    UtcInstant::now(),
+                )
                 .await
                 .expect("the task should be added");
         }
@@ -217,7 +237,12 @@ mod tests {
                 .expect("tasks should link");
         for task_id in task_ids.into_iter().take(done_count) {
             CompleteTask::new(db_pool)
-                .execute(user_id, task_id, UtcInstant::now())
+                .execute(
+                    user_id,
+                    task_id,
+                    &RequestTimeZone::default(),
+                    UtcInstant::now(),
+                )
                 .await
                 .expect("the task should be completed");
         }
@@ -231,7 +256,13 @@ mod tests {
         let mut board_connection = db_pool.acquire().await.expect("a connection");
 
         let board = BuildBoard::new()
-            .execute(&mut board_connection, seeded_board.board_summary.clone())
+            .execute(
+                &mut board_connection,
+                owner_id,
+                seeded_board.board_summary.clone(),
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the board should build");
 
@@ -344,7 +375,13 @@ mod tests {
         let mut board_connection = db_pool.acquire().await.expect("a connection");
 
         let board = BuildBoard::new()
-            .execute(&mut board_connection, empty_board.clone())
+            .execute(
+                &mut board_connection,
+                owner_id,
+                empty_board.clone(),
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the board should build");
 

@@ -1,6 +1,7 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::actions::build_board::BuildBoard;
 use crate::features::boards::entities::board::Board;
@@ -36,6 +37,7 @@ impl<'a> RestoreCard<'a> {
         &self,
         user_id: Uuid,
         card_id: Uuid,
+        request_time_zone: &RequestTimeZone,
         now: UtcInstant,
     ) -> Result<Board, CardError> {
         let mut restore_transaction = self.db_pool.begin().await?;
@@ -75,7 +77,13 @@ impl<'a> RestoreCard<'a> {
             .await?;
         let board = self
             .build_board
-            .execute(&mut restore_transaction, board_summary)
+            .execute(
+                &mut restore_transaction,
+                user_id,
+                board_summary,
+                request_time_zone,
+                now,
+            )
             .await?;
         restore_transaction.commit().await?;
         Ok(board)

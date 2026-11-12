@@ -24,6 +24,13 @@ pub struct OptionDraft {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PropertyDraft {
+    pub name: String,
+    pub kind: BoardPropertyKind,
+    pub option_drafts: Vec<OptionDraft>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewPropertyOption {
     pub id: Uuid,
     pub user_id: Uuid,

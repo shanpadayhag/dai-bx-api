@@ -5,7 +5,9 @@ use uuid::Uuid;
 
 use crate::core::error::AppError;
 use crate::core::json_field::deserialize_present_field;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::responses::board_response::BoardResponse;
 use crate::features::cards::actions::update_card::UpdateCard;
 use crate::features::cards::entities::card::{
@@ -32,6 +34,7 @@ pub struct PatchCardRequest {
 pub async fn patch_card(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(card_id_text): Path<String>,
     Json(patch_request): Json<PatchCardRequest>,
 ) -> Result<Json<BoardResponse>, AppError> {
@@ -60,6 +63,8 @@ pub async fn patch_card(
             card_id,
             &card_changes,
             patch_request.rename_events,
+            &request_time_zone,
+            UtcInstant::now(),
         )
         .await?;
     Ok(Json(board.into()))

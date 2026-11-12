@@ -6,7 +6,9 @@ use uuid::Uuid;
 use crate::core::error::AppError;
 use crate::core::idle_length::{IDLE_LENGTH_HINT, IdleLength};
 use crate::core::json_field::deserialize_present_field;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::board_lists::actions::update_board_list::UpdateBoardList;
 use crate::features::board_lists::entities::board_list::{ListChanges, validate_list_name};
 use crate::features::boards::responses::board_response::BoardResponse;
@@ -32,6 +34,7 @@ fn parse_archive_after(archive_after_text: Option<&str>) -> Result<Option<IdleLe
 pub async fn patch_list(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(list_id_text): Path<String>,
     Json(patch_request): Json<PatchListRequest>,
 ) -> Result<Json<BoardResponse>, AppError> {
@@ -48,7 +51,13 @@ pub async fn patch_list(
             .transpose()?,
     };
     let board = UpdateBoardList::new(&app_state.db_pool)
-        .execute(write_session.user_id, list_id, list_changes)
+        .execute(
+            write_session.user_id,
+            list_id,
+            list_changes,
+            &request_time_zone,
+            UtcInstant::now(),
+        )
         .await?;
     Ok(Json(board.into()))
 }

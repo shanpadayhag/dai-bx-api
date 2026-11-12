@@ -70,6 +70,7 @@ mod tests {
         let block = Some(ScheduleBlock {
             minutes: 30,
             category_id: None,
+            start_time: None,
         });
         create_card_schedule
             .execute(

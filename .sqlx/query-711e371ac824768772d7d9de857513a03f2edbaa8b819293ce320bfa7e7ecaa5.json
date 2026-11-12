@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET calendar_time_zone = 'Asia/Manila' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "711e371ac824768772d7d9de857513a03f2edbaa8b819293ce320bfa7e7ecaa5"
+}

@@ -4,7 +4,9 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::core::error::AppError;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::tasks::actions::add_task::AddTask;
 use crate::features::tasks::entities::task::validate_task_name;
 use crate::features::tasks::responses::group_tasks_response::GroupTasksResponse;
@@ -20,6 +22,7 @@ pub struct PostGroupTasksRequest {
 pub async fn post_group_tasks(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(task_group_id_text): Path<String>,
     Json(post_request): Json<PostGroupTasksRequest>,
 ) -> Result<Json<GroupTasksResponse>, AppError> {
@@ -36,6 +39,8 @@ pub async fn post_group_tasks(
             task_group_id,
             &task_name,
             parent_task_id,
+            &request_time_zone,
+            UtcInstant::now(),
         )
         .await?;
     Ok(Json(group_tasks.into()))

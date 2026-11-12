@@ -7,7 +7,7 @@ use crate::features::cards::actions::move_card_to_list_top::MoveCardToListTop;
 use crate::features::cards::data_sources::postgres::card_source::PostgresCardSource;
 use crate::features::cards::data_sources::postgres::card_trigger_source::PostgresCardTriggerSource;
 use crate::features::cards::entities::card_move::{CardMoveReason, MoveCause};
-use crate::features::cards::entities::card_trigger::TriggerKind;
+use crate::features::cards::entities::card_trigger::{TriggerEvent, TriggerKind};
 use crate::features::cards::error::CardError;
 
 #[derive(Default)]
@@ -33,7 +33,7 @@ impl FireCardTrigger {
         connection: &mut PgConnection,
         user_id: Uuid,
         card_id: Uuid,
-        trigger_kind: TriggerKind,
+        trigger_event: TriggerEvent<'_>,
         task_title: Option<&str>,
         now: UtcInstant,
     ) -> Result<bool, CardError> {
@@ -41,14 +41,15 @@ impl FireCardTrigger {
             .lock_board_of_card
             .execute(&mut *connection, user_id, card_id)
             .await?;
-        if trigger_kind == TriggerKind::Finished
+        if let TriggerEvent::Finished { uncheck_cutoffs } = trigger_event
             && self
                 .postgres_card_source
-                .has_open_linked_tasks(&mut *connection, card_id)
+                .has_open_linked_tasks(&mut *connection, card_id, uncheck_cutoffs)
                 .await?
         {
             return Ok(false);
         }
+        let trigger_kind = trigger_event.kind();
         let Some(target_list_id) = self
             .postgres_card_trigger_source
             .find_target_list_id(&mut *connection, card_id, trigger_kind)
@@ -78,6 +79,8 @@ impl FireCardTrigger {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::request_time_zone::RequestTimeZone;
+    use crate::features::task_groups::entities::uncheck_cutoffs::UncheckCutoffs;
     use sqlx::PgPool;
 
     use super::*;
@@ -91,13 +94,20 @@ mod tests {
     use crate::features::tasks::actions::add_task::AddTask;
 
     async fn fire(db_pool: &PgPool, user_id: Uuid, card_id: Uuid, kind: TriggerKind) -> bool {
+        let uncheck_cutoffs = UncheckCutoffs::default();
+        let trigger_event = match kind {
+            TriggerKind::Started => TriggerEvent::Started,
+            TriggerKind::Finished => TriggerEvent::Finished {
+                uncheck_cutoffs: &uncheck_cutoffs,
+            },
+        };
         let mut fire_transaction = db_pool.begin().await.expect("a transaction");
         let has_moved = FireCardTrigger::new()
             .execute(
                 &mut fire_transaction,
                 user_id,
                 card_id,
-                kind,
+                trigger_event,
                 Some("Ship"),
                 UtcInstant::now(),
             )
@@ -173,7 +183,14 @@ mod tests {
             .expect("the group should be created");
         for task_name in ["Draft", "Send"] {
             AddTask::new(&db_pool)
-                .execute(user_id, task_group.id, task_name, None)
+                .execute(
+                    user_id,
+                    task_group.id,
+                    task_name,
+                    None,
+                    &RequestTimeZone::default(),
+                    UtcInstant::now(),
+                )
                 .await
                 .expect("the task should be added");
         }

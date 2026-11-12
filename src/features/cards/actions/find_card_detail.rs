@@ -1,15 +1,19 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::card_schedules::actions::list_card_schedules::ListCardSchedules;
 use crate::features::card_schedules::entities::card_schedule::next_move_of;
 use crate::features::cards::data_sources::postgres::card_source::PostgresCardSource;
 use crate::features::cards::data_sources::postgres::card_trigger_source::PostgresCardTriggerSource;
 use crate::features::cards::entities::card::CardDetail;
 use crate::features::cards::error::CardError;
+use crate::features::task_groups::actions::find_uncheck_cutoffs::FindUncheckCutoffs;
 
 pub struct FindCardDetail<'a> {
     db_pool: &'a PgPool,
+    find_uncheck_cutoffs: FindUncheckCutoffs,
     list_card_schedules: ListCardSchedules,
     postgres_card_source: PostgresCardSource,
     postgres_card_trigger_source: PostgresCardTriggerSource,
@@ -19,13 +23,20 @@ impl<'a> FindCardDetail<'a> {
     pub fn new(db_pool: &'a PgPool) -> Self {
         Self {
             db_pool,
+            find_uncheck_cutoffs: FindUncheckCutoffs::new(),
             list_card_schedules: ListCardSchedules::new(),
             postgres_card_source: PostgresCardSource,
             postgres_card_trigger_source: PostgresCardTriggerSource,
         }
     }
 
-    pub async fn execute(&self, user_id: Uuid, card_id: Uuid) -> Result<CardDetail, CardError> {
+    pub async fn execute(
+        &self,
+        user_id: Uuid,
+        card_id: Uuid,
+        request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
+    ) -> Result<CardDetail, CardError> {
         let mut card_connection = self.db_pool.acquire().await?;
         let card_with_notes = self
             .postgres_card_source
@@ -37,9 +48,13 @@ impl<'a> FindCardDetail<'a> {
             .postgres_card_source
             .list_values(&mut *card_connection, card_id)
             .await?;
+        let uncheck_cutoffs = self
+            .find_uncheck_cutoffs
+            .execute(&mut *card_connection, user_id, request_time_zone, now)
+            .await?;
         let linked_tasks = self
             .postgres_card_source
-            .list_linked_tasks(&mut *card_connection, card_id)
+            .list_linked_tasks(&mut *card_connection, card_id, &uncheck_cutoffs)
             .await?;
         card.linked_task_count = linked_tasks.len() as i64;
         card.done_linked_task_count = linked_tasks

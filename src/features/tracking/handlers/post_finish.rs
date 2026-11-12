@@ -4,6 +4,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::core::error::AppError;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::entities::calendar_event::parse_event_instant;
@@ -21,6 +22,7 @@ pub struct PostFinishRequest {
 pub async fn post_finish(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(event_id_text): Path<String>,
     Json(finish_request): Json<PostFinishRequest>,
 ) -> Result<Json<FinishedItemResponse>, AppError> {
@@ -35,6 +37,7 @@ pub async fn post_finish(
             event_id,
             requested_ends_at,
             finish_request.mark_done.unwrap_or(false),
+            &request_time_zone,
             UtcInstant::now(),
         )
         .await?;

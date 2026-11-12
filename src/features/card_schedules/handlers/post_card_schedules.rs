@@ -20,6 +20,7 @@ use crate::features::throttling::entities::write_session::WriteSession;
 pub struct ScheduleBlockRequest {
     minutes: i64,
     category_id: Option<String>,
+    time: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -60,7 +61,11 @@ impl ScheduleRequest {
                     .as_deref()
                     .map(parse_id)
                     .transpose()?;
-                Ok::<_, AppError>(ScheduleBlock::new(block_request.minutes, category_id)?)
+                Ok::<_, AppError>(ScheduleBlock::new(
+                    block_request.minutes,
+                    category_id,
+                    block_request.time.as_deref(),
+                )?)
             })
             .transpose()?;
         Ok(ScheduleSettings {

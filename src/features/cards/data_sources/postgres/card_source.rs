@@ -9,6 +9,7 @@ use crate::features::cards::entities::card::{
 use crate::features::cards::entities::card_archive::{
     ArchiveHow, ArchivedCard, CardArchive, IdleCard,
 };
+use crate::features::task_groups::entities::uncheck_cutoffs::UncheckCutoffs;
 
 #[derive(Default)]
 pub struct PostgresCardSource;
@@ -162,19 +163,27 @@ impl PostgresCardSource {
         &self,
         executor: impl PgExecutor<'_>,
         card_id: Uuid,
+        uncheck_cutoffs: &UncheckCutoffs,
     ) -> Result<Vec<LinkedTask>, sqlx::Error> {
         sqlx::query_as!(
             LinkedTask,
             r#"SELECT tasks.id,
                       tasks.name,
-                      tasks.completed_at IS NOT NULL AS "is_done!",
+                      (tasks.completed_at
+                       >= coalesce(to_timestamp(uncheck_cutoffs.cutoff_millis / 1000.0),
+                                   '-infinity')) IS TRUE AS "is_done!",
                       task_groups.id AS group_id,
                       task_groups.name AS group_name
                FROM tasks
                JOIN task_groups ON task_groups.id = tasks.group_id
+               LEFT JOIN unnest($2::uuid[], $3::bigint[])
+                    AS uncheck_cutoffs(group_id, cutoff_millis)
+                    ON uncheck_cutoffs.group_id = tasks.group_id
                WHERE tasks.card_id = $1
                ORDER BY task_groups.created_at, task_groups.id, tasks.position, tasks.id"#,
             card_id,
+            &uncheck_cutoffs.group_ids,
+            &uncheck_cutoffs.cutoff_millis,
         )
         .fetch_all(executor)
         .await
@@ -345,12 +354,23 @@ impl PostgresCardSource {
         &self,
         executor: impl PgExecutor<'_>,
         card_id: Uuid,
+        uncheck_cutoffs: &UncheckCutoffs,
     ) -> Result<bool, sqlx::Error> {
         sqlx::query_scalar!(
             r#"SELECT EXISTS (
-                   SELECT 1 FROM tasks WHERE card_id = $1 AND completed_at IS NULL
+                   SELECT 1
+                   FROM tasks
+                   LEFT JOIN unnest($2::uuid[], $3::bigint[])
+                        AS uncheck_cutoffs(group_id, cutoff_millis)
+                        ON uncheck_cutoffs.group_id = tasks.group_id
+                   WHERE tasks.card_id = $1
+                     AND (tasks.completed_at
+                          >= coalesce(to_timestamp(uncheck_cutoffs.cutoff_millis / 1000.0),
+                                      '-infinity')) IS NOT TRUE
                ) AS "has_open_linked_tasks!""#,
             card_id,
+            &uncheck_cutoffs.group_ids,
+            &uncheck_cutoffs.cutoff_millis,
         )
         .fetch_one(executor)
         .await
@@ -593,6 +613,7 @@ impl PostgresCardSource {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::core::request_time_zone::RequestTimeZone;
     use sqlx::PgPool;
 
     use super::*;
@@ -634,7 +655,13 @@ pub mod tests {
             .expect("the board should be created");
         for list_name in list_names {
             board = CreateBoardList::new(db_pool)
-                .execute(user_id, board.board.id, list_name)
+                .execute(
+                    user_id,
+                    board.board.id,
+                    list_name,
+                    &RequestTimeZone::default(),
+                    UtcInstant::now(),
+                )
                 .await
                 .expect("the list should be created");
         }
@@ -816,7 +843,14 @@ pub mod tests {
             .expect("the group should be created");
         for task_name in ["Draft", "Send"] {
             AddTask::new(&db_pool)
-                .execute(owner_id, task_group.id, task_name, None)
+                .execute(
+                    owner_id,
+                    task_group.id,
+                    task_name,
+                    None,
+                    &RequestTimeZone::default(),
+                    UtcInstant::now(),
+                )
                 .await
                 .expect("the task should be added");
         }
@@ -829,12 +863,17 @@ pub mod tests {
                 .expect("tasks should link");
         let draft_task_id = *linked_task_ids.iter().min().expect("a linked task");
         CompleteTask::new(&db_pool)
-            .execute(owner_id, draft_task_id, UtcInstant::now())
+            .execute(
+                owner_id,
+                draft_task_id,
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the task should be completed");
 
         let linked_tasks = PostgresCardSource
-            .list_linked_tasks(&db_pool, card_id)
+            .list_linked_tasks(&db_pool, card_id, &UncheckCutoffs::default())
             .await
             .expect("listing should run");
 

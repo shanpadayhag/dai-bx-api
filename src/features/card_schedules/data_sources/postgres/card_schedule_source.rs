@@ -1,4 +1,4 @@
-use jiff::civil::DateTime;
+use jiff::civil::{DateTime, Time};
 use sqlx::PgExecutor;
 use sqlx::types::Json;
 use uuid::Uuid;
@@ -26,6 +26,7 @@ struct CardScheduleRow {
     repeat_rule: Option<Json<RepeatRule>>,
     block_minutes: Option<i32>,
     block_category_id: Option<Uuid>,
+    block_time_text: Option<String>,
     paused: bool,
     next_run_at_millis: Option<i64>,
 }
@@ -37,6 +38,11 @@ impl TryFrom<CardScheduleRow> for CardSchedule {
         let local_start = schedule_row
             .local_start_text
             .parse::<DateTime>()
+            .map_err(|parse_error| sqlx::Error::Decode(Box::new(parse_error)))?;
+        let block_start_time = schedule_row
+            .block_time_text
+            .map(|block_time_text| block_time_text.parse::<Time>())
+            .transpose()
             .map_err(|parse_error| sqlx::Error::Decode(Box::new(parse_error)))?;
         Ok(Self {
             id: schedule_row.id,
@@ -55,6 +61,7 @@ impl TryFrom<CardScheduleRow> for CardSchedule {
             block: schedule_row.block_minutes.map(|minutes| ScheduleBlock {
                 minutes,
                 category_id: schedule_row.block_category_id,
+                start_time: block_start_time,
             }),
             is_paused: schedule_row.paused,
             next_run_at: schedule_row
@@ -93,9 +100,10 @@ impl PostgresCardScheduleSource {
         let insert_result = sqlx::query!(
             "INSERT INTO card_schedules
                  (id, user_id, board_id, card_id, kind, target_list_id, time_zone, local_start,
-                  repeat_rule, block_minutes, block_category_id, next_run_at)
+                  repeat_rule, block_minutes, block_category_id, next_run_at, block_local_time)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::timestamp, $9, $10, $11,
-                     'epoch'::timestamptz + $12::bigint * interval '1 millisecond')",
+                     'epoch'::timestamptz + $12::bigint * interval '1 millisecond',
+                     $13::text::time)",
             new_schedule.id,
             new_schedule.user_id,
             new_schedule.board_id,
@@ -112,6 +120,7 @@ impl PostgresCardScheduleSource {
                 .block
                 .and_then(|schedule_block| schedule_block.category_id),
             new_schedule.next_run_at.unix_millis(),
+            schedule_settings.block_start_time_text(),
         )
         .execute(executor)
         .await;
@@ -135,6 +144,7 @@ impl PostgresCardScheduleSource {
                  block_minutes = $7,
                  block_category_id = $8,
                  next_run_at = 'epoch'::timestamptz + $9::bigint * interval '1 millisecond',
+                 block_local_time = $10::text::time,
                  updated_at = now()
              WHERE id = $1",
             schedule_id,
@@ -150,6 +160,7 @@ impl PostgresCardScheduleSource {
                 .block
                 .and_then(|schedule_block| schedule_block.category_id),
             next_run_at.unix_millis(),
+            schedule_settings.block_start_time_text(),
         )
         .execute(executor)
         .await;
@@ -232,6 +243,7 @@ impl PostgresCardScheduleSource {
                       card_schedules.repeat_rule AS "repeat_rule: Json<RepeatRule>",
                       card_schedules.block_minutes,
                       card_schedules.block_category_id,
+                      to_char(card_schedules.block_local_time, 'HH24:MI') AS block_time_text,
                       card_schedules.paused,
                       (extract(epoch FROM card_schedules.next_run_at) * 1000)::bigint AS next_run_at_millis
                FROM card_schedules
@@ -265,6 +277,7 @@ impl PostgresCardScheduleSource {
                       card_schedules.repeat_rule AS "repeat_rule: Json<RepeatRule>",
                       card_schedules.block_minutes,
                       card_schedules.block_category_id,
+                      to_char(card_schedules.block_local_time, 'HH24:MI') AS block_time_text,
                       card_schedules.paused,
                       (extract(epoch FROM card_schedules.next_run_at) * 1000)::bigint AS next_run_at_millis
                FROM card_schedules
@@ -297,6 +310,7 @@ impl PostgresCardScheduleSource {
                       card_schedules.repeat_rule AS "repeat_rule: Json<RepeatRule>",
                       card_schedules.block_minutes,
                       card_schedules.block_category_id,
+                      to_char(card_schedules.block_local_time, 'HH24:MI') AS block_time_text,
                       card_schedules.paused,
                       (extract(epoch FROM card_schedules.next_run_at) * 1000)::bigint AS next_run_at_millis
                FROM card_schedules
@@ -468,6 +482,7 @@ impl PostgresCardScheduleSource {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::core::request_time_zone::RequestTimeZone;
     use sqlx::PgPool;
 
     use super::*;
@@ -522,17 +537,35 @@ pub mod tests {
             .await
             .expect("the board should be created");
         let board = CreateBoardList::new(db_pool)
-            .execute(user_id, board.board.id, "To Do")
+            .execute(
+                user_id,
+                board.board.id,
+                "To Do",
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the list should be created");
         let board = CreateBoardList::new(db_pool)
-            .execute(user_id, board.board.id, "Doing")
+            .execute(
+                user_id,
+                board.board.id,
+                "Doing",
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the list should be created");
         let to_do_list_id = board.lists[0].id;
         let doing_list_id = board.lists[1].id;
         let board = CreateCard::new(db_pool)
-            .execute(user_id, doing_list_id, "Weekly review")
+            .execute(
+                user_id,
+                doing_list_id,
+                "Weekly review",
+                &RequestTimeZone::default(),
+                UtcInstant::now(),
+            )
             .await
             .expect("the card should be created");
         SeededCard {
@@ -613,6 +646,7 @@ pub mod tests {
                 block: Some(ScheduleBlock {
                     minutes: 45,
                     category_id: Some(category_id),
+                    start_time: None,
                 }),
                 ..weekly_settings(seeded_card.to_do_list_id)
             },
@@ -671,6 +705,7 @@ pub mod tests {
                     block: Some(ScheduleBlock {
                         minutes: 30,
                         category_id: Some(other_category_id),
+                        start_time: None,
                     }),
                     ..weekly_settings(seeded_card.to_do_list_id)
                 },
@@ -707,6 +742,7 @@ pub mod tests {
             block: Some(ScheduleBlock {
                 minutes: 30,
                 category_id: None,
+                start_time: None,
             }),
             ..weekly_settings(seeded_card.doing_list_id)
         };

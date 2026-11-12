@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH RECURSIVE task_subtree AS (\n                   SELECT id, completed_at FROM tasks WHERE id = $1 AND group_id = $2\n                   UNION ALL\n                   SELECT tasks.id, tasks.completed_at\n                   FROM tasks\n                   JOIN task_subtree ON tasks.parent_id = task_subtree.id\n               )\n               SELECT EXISTS (\n                   SELECT 1\n                   FROM task_subtree\n                   WHERE (completed_at >= coalesce(to_timestamp($3::bigint / 1000.0), '-infinity'))\n                         IS NOT TRUE\n               ) AS \"has_open_task!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "has_open_task!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "be5ab1092219a5533fe891ea7531be727085a4b5458cd478f8a74ddc8674c93b"
+}
