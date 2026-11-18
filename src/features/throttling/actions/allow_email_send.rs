@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::PgConnection;
 
 use crate::features::throttling::data_sources::postgres::throttle_source::PostgresThrottleSource;
 use crate::features::throttling::entities::throttle_attempt::{
@@ -6,26 +6,33 @@ use crate::features::throttling::entities::throttle_attempt::{
 };
 use crate::features::throttling::error::ThrottleError;
 
-pub struct AllowEmailSend<'a> {
-    postgres_throttle_source: PostgresThrottleSource<'a>,
+pub struct AllowEmailSend {
+    postgres_throttle_source: PostgresThrottleSource,
 }
 
-impl<'a> AllowEmailSend<'a> {
-    pub fn new(db_pool: &'a PgPool) -> Self {
+impl Default for AllowEmailSend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AllowEmailSend {
+    pub fn new() -> Self {
         Self {
-            postgres_throttle_source: PostgresThrottleSource::new(db_pool),
+            postgres_throttle_source: PostgresThrottleSource,
         }
     }
 
     pub async fn execute(
         &self,
+        connection: &mut PgConnection,
         purpose: EmailSendPurpose,
         email: &str,
     ) -> Result<(), ThrottleError> {
         let email_send_key = email_send_key(purpose, email);
         if let Some(blocked_seconds) = self
             .postgres_throttle_source
-            .find_longest_block_seconds(std::slice::from_ref(&email_send_key))
+            .find_longest_block_seconds(&mut *connection, std::slice::from_ref(&email_send_key))
             .await?
         {
             return Err(ThrottleError::Blocked {
@@ -33,7 +40,12 @@ impl<'a> AllowEmailSend<'a> {
             });
         }
         self.postgres_throttle_source
-            .record_windowed_failure(&email_send_key, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_SECONDS)
+            .record_windowed_failure(
+                &mut *connection,
+                &email_send_key,
+                EMAIL_SEND_LIMIT,
+                EMAIL_SEND_WINDOW_SECONDS,
+            )
             .await?;
         Ok(())
     }
@@ -41,11 +53,17 @@ impl<'a> AllowEmailSend<'a> {
 
 #[cfg(test)]
 mod tests {
+    use sqlx::PgPool;
+
     use super::*;
 
     async fn try_send(db_pool: &PgPool, purpose: EmailSendPurpose, email: &str) -> Result<(), u64> {
-        AllowEmailSend::new(db_pool)
-            .execute(purpose, email)
+        let mut connection = db_pool
+            .acquire()
+            .await
+            .expect("a connection should be free");
+        AllowEmailSend::new()
+            .execute(&mut connection, purpose, email)
             .await
             .map_err(|throttle_error| match throttle_error {
                 ThrottleError::Blocked {

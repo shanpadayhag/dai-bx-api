@@ -47,7 +47,7 @@ pub struct VerifySignInCode<'a> {
     accept_second_factor: AcceptSecondFactor<'a>,
     check_attempt_allowed: CheckAttemptAllowed<'a>,
     record_failed_attempt: RecordFailedAttempt<'a>,
-    clear_account_ip_throttle: ClearAccountIpThrottle<'a>,
+    clear_account_ip_throttle: ClearAccountIpThrottle,
     create_session: CreateSession,
     remember_device: RememberDevice,
     record_security_event: RecordSecurityEvent,
@@ -65,7 +65,7 @@ impl<'a> VerifySignInCode<'a> {
             accept_second_factor: AcceptSecondFactor::new(&app_state.app_config.totp_keyring),
             check_attempt_allowed: CheckAttemptAllowed::new(db_pool),
             record_failed_attempt: RecordFailedAttempt::new(db_pool),
-            clear_account_ip_throttle: ClearAccountIpThrottle::new(db_pool),
+            clear_account_ip_throttle: ClearAccountIpThrottle::new(),
             create_session: CreateSession::new(),
             remember_device: RememberDevice::new(),
             record_security_event: RecordSecurityEvent::new(),
@@ -186,7 +186,7 @@ impl<'a> VerifySignInCode<'a> {
         }
         verify_transaction.commit().await?;
         self.clear_account_ip_throttle
-            .execute(&throttle_attempt)
+            .execute(self.db_pool, &throttle_attempt)
             .await?;
         Ok(VerifiedSignIn {
             session_tokens,

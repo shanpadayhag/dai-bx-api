@@ -13,17 +13,19 @@ use crate::features::throttling::entities::throttle_attempt::{
 use crate::features::users::entities::user::User;
 
 pub struct CheckCurrentPassword<'a> {
+    db_pool: &'a PgPool,
     check_attempt_allowed: CheckAttemptAllowed<'a>,
     record_failed_attempt: RecordFailedAttempt<'a>,
-    clear_account_ip_throttle: ClearAccountIpThrottle<'a>,
+    clear_account_ip_throttle: ClearAccountIpThrottle,
 }
 
 impl<'a> CheckCurrentPassword<'a> {
     pub fn new(db_pool: &'a PgPool) -> Self {
         Self {
+            db_pool,
             check_attempt_allowed: CheckAttemptAllowed::new(db_pool),
             record_failed_attempt: RecordFailedAttempt::new(db_pool),
-            clear_account_ip_throttle: ClearAccountIpThrottle::new(db_pool),
+            clear_account_ip_throttle: ClearAccountIpThrottle::new(),
         }
     }
 
@@ -51,7 +53,7 @@ impl<'a> CheckCurrentPassword<'a> {
             return Ok(false);
         }
         self.clear_account_ip_throttle
-            .execute(&throttle_attempt)
+            .execute(self.db_pool, &throttle_attempt)
             .await?;
         Ok(true)
     }

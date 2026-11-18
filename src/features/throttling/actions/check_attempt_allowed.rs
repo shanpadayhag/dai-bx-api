@@ -5,13 +5,15 @@ use crate::features::throttling::entities::throttle_attempt::ThrottleAttempt;
 use crate::features::throttling::error::ThrottleError;
 
 pub struct CheckAttemptAllowed<'a> {
-    postgres_throttle_source: PostgresThrottleSource<'a>,
+    db_pool: &'a PgPool,
+    postgres_throttle_source: PostgresThrottleSource,
 }
 
 impl<'a> CheckAttemptAllowed<'a> {
     pub fn new(db_pool: &'a PgPool) -> Self {
         Self {
-            postgres_throttle_source: PostgresThrottleSource::new(db_pool),
+            db_pool,
+            postgres_throttle_source: PostgresThrottleSource,
         }
     }
 
@@ -23,7 +25,7 @@ impl<'a> CheckAttemptAllowed<'a> {
         }
         match self
             .postgres_throttle_source
-            .find_longest_block_seconds(&checked_keys)
+            .find_longest_block_seconds(self.db_pool, &checked_keys)
             .await?
         {
             Some(blocked_seconds) => Err(ThrottleError::Blocked {
@@ -120,8 +122,8 @@ mod tests {
         let throttle_attempt = sign_in_attempt("person@example.com", "180.191.77.129");
         fail(&db_pool, &throttle_attempt, 6).await;
 
-        ClearAccountIpThrottle::new(&db_pool)
-            .execute(&throttle_attempt)
+        ClearAccountIpThrottle::new()
+            .execute(&db_pool, &throttle_attempt)
             .await
             .expect("clearing should succeed");
 

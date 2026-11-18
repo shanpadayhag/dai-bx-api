@@ -8,20 +8,27 @@ use crate::features::throttling::entities::throttle_attempt::{
 use crate::features::throttling::error::ThrottleError;
 
 pub struct AllowWrite<'a> {
-    postgres_throttle_source: PostgresThrottleSource<'a>,
+    db_pool: &'a PgPool,
+    postgres_throttle_source: PostgresThrottleSource,
 }
 
 impl<'a> AllowWrite<'a> {
     pub fn new(db_pool: &'a PgPool) -> Self {
         Self {
-            postgres_throttle_source: PostgresThrottleSource::new(db_pool),
+            db_pool,
+            postgres_throttle_source: PostgresThrottleSource,
         }
     }
 
     pub async fn execute(&self, user_id: Uuid) -> Result<(), ThrottleError> {
         let write_count = self
             .postgres_throttle_source
-            .record_windowed_failure(&write_key(user_id), WRITE_LIMIT, WRITE_WINDOW_SECONDS)
+            .record_windowed_failure(
+                self.db_pool,
+                &write_key(user_id),
+                WRITE_LIMIT,
+                WRITE_WINDOW_SECONDS,
+            )
             .await?;
         match write_count.blocked_seconds {
             Some(blocked_seconds) if write_count.failures > WRITE_LIMIT => {

@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::PgExecutor;
 
 use crate::features::throttling::entities::throttle_attempt::{
     FIRST_BLOCK_SECONDS, FREE_ACCOUNT_IP_FAILURES, MAX_BLOCK_SECONDS,
@@ -12,17 +12,12 @@ pub struct ThrottleCount {
     pub blocked_seconds: Option<i64>,
 }
 
-pub struct PostgresThrottleSource<'a> {
-    db_pool: &'a PgPool,
-}
+pub struct PostgresThrottleSource;
 
-impl<'a> PostgresThrottleSource<'a> {
-    pub fn new(db_pool: &'a PgPool) -> Self {
-        Self { db_pool }
-    }
-
+impl PostgresThrottleSource {
     pub async fn find_longest_block_seconds(
         &self,
+        executor: impl PgExecutor<'_>,
         throttle_keys: &[String],
     ) -> Result<Option<i64>, sqlx::Error> {
         sqlx::query_scalar!(
@@ -31,12 +26,13 @@ impl<'a> PostgresThrottleSource<'a> {
                WHERE key = ANY($1) AND blocked_until > now()"#,
             throttle_keys,
         )
-        .fetch_one(self.db_pool)
+        .fetch_one(executor)
         .await
     }
 
     pub async fn record_escalating_failure(
         &self,
+        executor: impl PgExecutor<'_>,
         throttle_key: &str,
     ) -> Result<ThrottleCount, sqlx::Error> {
         sqlx::query_as!(
@@ -64,12 +60,13 @@ impl<'a> PostgresThrottleSource<'a> {
             MAX_BLOCK_SECONDS as f64,
             MAX_DOUBLING_EXPONENT,
         )
-        .fetch_one(self.db_pool)
+        .fetch_one(executor)
         .await
     }
 
     pub async fn record_windowed_failure(
         &self,
+        executor: impl PgExecutor<'_>,
         throttle_key: &str,
         failure_limit: i32,
         window_seconds: i64,
@@ -104,13 +101,17 @@ impl<'a> PostgresThrottleSource<'a> {
             failure_limit,
             window_seconds as f64,
         )
-        .fetch_one(self.db_pool)
+        .fetch_one(executor)
         .await
     }
 
-    pub async fn delete(&self, throttle_key: &str) -> Result<(), sqlx::Error> {
+    pub async fn delete(
+        &self,
+        executor: impl PgExecutor<'_>,
+        throttle_key: &str,
+    ) -> Result<(), sqlx::Error> {
         sqlx::query!("DELETE FROM auth_throttles WHERE key = $1", throttle_key)
-            .execute(self.db_pool)
+            .execute(executor)
             .await?;
         Ok(())
     }
@@ -118,6 +119,8 @@ impl<'a> PostgresThrottleSource<'a> {
 
 #[cfg(test)]
 mod tests {
+    use sqlx::PgPool;
+
     use super::*;
     use crate::features::throttling::entities::throttle_attempt::account_ip_block_seconds;
 
@@ -147,11 +150,11 @@ mod tests {
 
     #[sqlx::test]
     async fn escalates_blocks_exactly_like_the_rule(db_pool: PgPool) {
-        let throttle_source = PostgresThrottleSource::new(&db_pool);
+        let throttle_source = PostgresThrottleSource;
 
         for expected_failures in 1..=12 {
             let throttle_count = throttle_source
-                .record_escalating_failure("signin:acct_ip:test:1.2.3.4")
+                .record_escalating_failure(&db_pool, "signin:acct_ip:test:1.2.3.4")
                 .await
                 .expect("recording should succeed");
 
@@ -165,13 +168,13 @@ mod tests {
 
     #[sqlx::test]
     async fn survives_a_very_long_failure_streak_at_the_cap(db_pool: PgPool) {
-        let throttle_source = PostgresThrottleSource::new(&db_pool);
+        let throttle_source = PostgresThrottleSource;
         let mut last_throttle_count = None;
 
         for _ in 0..80 {
             last_throttle_count = Some(
                 throttle_source
-                    .record_escalating_failure("signin:acct_ip:streak:1.2.3.4")
+                    .record_escalating_failure(&db_pool, "signin:acct_ip:streak:1.2.3.4")
                     .await
                     .expect("recording should succeed"),
             );
@@ -185,18 +188,18 @@ mod tests {
 
     #[sqlx::test]
     async fn blocks_a_windowed_key_at_its_limit_until_the_window_ends(db_pool: PgPool) {
-        let throttle_source = PostgresThrottleSource::new(&db_pool);
+        let throttle_source = PostgresThrottleSource;
 
         let below_limit_count = throttle_source
-            .record_windowed_failure("email_send:verify_email:k", 3, 3600)
+            .record_windowed_failure(&db_pool, "email_send:verify_email:k", 3, 3600)
             .await
             .expect("recording should succeed");
         throttle_source
-            .record_windowed_failure("email_send:verify_email:k", 3, 3600)
+            .record_windowed_failure(&db_pool, "email_send:verify_email:k", 3, 3600)
             .await
             .expect("recording should succeed");
         let at_limit_count = throttle_source
-            .record_windowed_failure("email_send:verify_email:k", 3, 3600)
+            .record_windowed_failure(&db_pool, "email_send:verify_email:k", 3, 3600)
             .await
             .expect("recording should succeed");
 
@@ -207,17 +210,17 @@ mod tests {
 
     #[sqlx::test]
     async fn starts_a_fresh_window_once_the_old_one_has_passed(db_pool: PgPool) {
-        let throttle_source = PostgresThrottleSource::new(&db_pool);
+        let throttle_source = PostgresThrottleSource;
         for _ in 0..3 {
             throttle_source
-                .record_windowed_failure("signin:ip:1.2.3.4", 3, 3600)
+                .record_windowed_failure(&db_pool, "signin:ip:1.2.3.4", 3, 3600)
                 .await
                 .expect("recording should succeed");
         }
         age_window(&db_pool, "signin:ip:1.2.3.4", 3601).await;
 
         let fresh_window_count = throttle_source
-            .record_windowed_failure("signin:ip:1.2.3.4", 3, 3600)
+            .record_windowed_failure(&db_pool, "signin:ip:1.2.3.4", 3, 3600)
             .await
             .expect("recording should succeed");
 
@@ -227,16 +230,16 @@ mod tests {
 
     #[sqlx::test]
     async fn finds_the_longest_active_block_among_keys_and_deletes_a_key(db_pool: PgPool) {
-        let throttle_source = PostgresThrottleSource::new(&db_pool);
+        let throttle_source = PostgresThrottleSource;
         for _ in 0..7 {
             throttle_source
-                .record_escalating_failure("long")
+                .record_escalating_failure(&db_pool, "long")
                 .await
                 .expect("recording should succeed");
         }
         for _ in 0..6 {
             throttle_source
-                .record_escalating_failure("short")
+                .record_escalating_failure(&db_pool, "short")
                 .await
                 .expect("recording should succeed");
         }
@@ -248,25 +251,25 @@ mod tests {
 
         assert_close(
             throttle_source
-                .find_longest_block_seconds(&keys)
+                .find_longest_block_seconds(&db_pool, &keys)
                 .await
                 .expect("lookup should succeed"),
             Some(120),
         );
         throttle_source
-            .delete("long")
+            .delete(&db_pool, "long")
             .await
             .expect("delete should succeed");
         assert_close(
             throttle_source
-                .find_longest_block_seconds(&keys)
+                .find_longest_block_seconds(&db_pool, &keys)
                 .await
                 .expect("lookup should succeed"),
             Some(60),
         );
         assert_eq!(
             throttle_source
-                .find_longest_block_seconds(&[String::from("absent")])
+                .find_longest_block_seconds(&db_pool, &[String::from("absent")])
                 .await
                 .expect("lookup should succeed"),
             None

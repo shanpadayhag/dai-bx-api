@@ -1,10 +1,12 @@
-use sqlx::{PgConnection, PgPool};
+use sqlx::{PgPool, Postgres, Transaction};
 use zeroize::Zeroizing;
 
 use crate::core::request_context::RequestContext;
 use crate::core::state::AppState;
 use crate::features::account::actions::check_current_password::CheckCurrentPassword;
-use crate::features::account::actions::check_second_factor::CheckSecondFactor;
+use crate::features::account::actions::check_second_factor::{
+    CheckSecondFactor, CheckedSecondFactor,
+};
 use crate::features::account::error::AccountError;
 use crate::features::security_log::actions::record_security_event::RecordSecurityEvent;
 use crate::features::security_log::entities::security_event::{
@@ -17,6 +19,11 @@ use crate::features::users::entities::user::User;
 pub struct IdentityProof<'a> {
     pub password: Zeroizing<String>,
     pub entered_code: &'a str,
+}
+
+pub struct ConfirmedIdentity {
+    pub signed_in_user: User,
+    pub transaction: Transaction<'static, Postgres>,
 }
 
 pub struct ConfirmIdentity<'a> {
@@ -44,11 +51,10 @@ impl<'a> ConfirmIdentity<'a> {
 
     pub async fn execute(
         &self,
-        connection: &mut PgConnection,
         current_session: CurrentSession,
         identity_proof: IdentityProof<'_>,
         request_context: &RequestContext,
-    ) -> Result<User, AccountError> {
+    ) -> Result<ConfirmedIdentity, AccountError> {
         let signed_in_user = self
             .find_user_by_id
             .execute(self.db_pool, current_session.user_id)
@@ -61,10 +67,12 @@ impl<'a> ConfirmIdentity<'a> {
         if !is_current_password {
             return Err(AccountError::WrongPassword);
         }
-        let accepted_factor = self
+        let CheckedSecondFactor {
+            accepted_factor,
+            mut transaction,
+        } = self
             .check_second_factor
             .execute(
-                &mut *connection,
                 &signed_in_user,
                 identity_proof.entered_code,
                 request_context,
@@ -73,7 +81,7 @@ impl<'a> ConfirmIdentity<'a> {
         if let Some(remaining_count) = accepted_factor.remaining_recovery_codes() {
             self.record_security_event
                 .execute(
-                    &mut *connection,
+                    &mut *transaction,
                     &NewSecurityEvent {
                         event_type: SecurityEventType::RecoveryCodeUsed,
                         subject_ref: Some(signed_in_user.security_ref),
@@ -85,6 +93,9 @@ impl<'a> ConfirmIdentity<'a> {
                 )
                 .await?;
         }
-        Ok(signed_in_user)
+        Ok(ConfirmedIdentity {
+            signed_in_user,
+            transaction,
+        })
     }
 }

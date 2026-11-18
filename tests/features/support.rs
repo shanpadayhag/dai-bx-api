@@ -20,9 +20,11 @@ use data_encoding::BASE32_NOPAD;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
 
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
+const PRODUCTION_POOL_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(2);
 const UNREACHABLE_HIBP_BASE_URL: &str = "http://127.0.0.1:9";
 const MAILPIT_API_URL: &str = "http://127.0.0.1:8025";
 const MAILPIT_LOOKUP_ATTEMPTS: usize = 30;
@@ -67,11 +69,21 @@ pub fn build_test_app(db_pool: PgPool) -> Router {
 pub fn build_test_app_with(db_pool: PgPool, app_config: AppConfig) -> Router {
     let mail_transport = build_mail_transport(&app_config.smtp_settings);
     app(AppState {
-        db_pool,
+        db_pool: production_sized_pool(&db_pool),
         app_config: Arc::new(app_config),
         http_client: build_http_client(),
         mail_transport,
     })
+}
+
+fn production_sized_pool(db_pool: &PgPool) -> PgPool {
+    if db_pool.is_closed() {
+        return db_pool.clone();
+    }
+    PgPoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(PRODUCTION_POOL_ACQUIRE_TIMEOUT)
+        .connect_lazy_with((*db_pool.connect_options()).clone())
 }
 
 pub async fn send(test_app: Router, request: Request<Body>) -> Response<Body> {

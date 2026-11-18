@@ -1,4 +1,4 @@
-use sqlx::{PgConnection, PgPool};
+use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::core::request_context::RequestContext;
 use crate::core::security::totp_secret_cipher::TotpKeyring;
@@ -14,30 +14,36 @@ use crate::features::throttling::entities::throttle_attempt::{
 };
 use crate::features::users::entities::user::User;
 
+pub struct CheckedSecondFactor {
+    pub accepted_factor: AcceptedSecondFactor,
+    pub transaction: Transaction<'static, Postgres>,
+}
+
 pub struct CheckSecondFactor<'a> {
+    db_pool: &'a PgPool,
     accept_second_factor: AcceptSecondFactor<'a>,
     check_attempt_allowed: CheckAttemptAllowed<'a>,
     record_failed_attempt: RecordFailedAttempt<'a>,
-    clear_account_ip_throttle: ClearAccountIpThrottle<'a>,
+    clear_account_ip_throttle: ClearAccountIpThrottle,
 }
 
 impl<'a> CheckSecondFactor<'a> {
     pub fn new(db_pool: &'a PgPool, totp_keyring: &'a TotpKeyring) -> Self {
         Self {
+            db_pool,
             accept_second_factor: AcceptSecondFactor::new(totp_keyring),
             check_attempt_allowed: CheckAttemptAllowed::new(db_pool),
             record_failed_attempt: RecordFailedAttempt::new(db_pool),
-            clear_account_ip_throttle: ClearAccountIpThrottle::new(db_pool),
+            clear_account_ip_throttle: ClearAccountIpThrottle::new(),
         }
     }
 
     pub async fn execute(
         &self,
-        connection: &mut PgConnection,
         signed_in_user: &User,
         entered_code: &str,
         request_context: &RequestContext,
-    ) -> Result<AcceptedSecondFactor, AccountError> {
+    ) -> Result<CheckedSecondFactor, AccountError> {
         let throttle_attempt = ThrottleAttempt {
             scope: ThrottleScope::CodeEntry,
             account_key: email_account_key(&signed_in_user.email),
@@ -47,19 +53,24 @@ impl<'a> CheckSecondFactor<'a> {
         self.check_attempt_allowed
             .execute(&throttle_attempt)
             .await?;
+        let mut transaction = self.db_pool.begin().await?;
         let Some(accepted_factor) = self
             .accept_second_factor
-            .execute(connection, signed_in_user.id, entered_code)
+            .execute(&mut transaction, signed_in_user.id, entered_code)
             .await?
         else {
+            transaction.rollback().await?;
             self.record_failed_attempt
                 .execute(&throttle_attempt)
                 .await?;
             return Err(AccountError::WrongCode);
         };
         self.clear_account_ip_throttle
-            .execute(&throttle_attempt)
+            .execute(&mut *transaction, &throttle_attempt)
             .await?;
-        Ok(accepted_factor)
+        Ok(CheckedSecondFactor {
+            accepted_factor,
+            transaction,
+        })
     }
 }

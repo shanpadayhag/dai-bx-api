@@ -12,7 +12,7 @@ use crate::features::users::actions::find_user_by_email::FindUserByEmail;
 
 pub struct ResendVerificationEmail<'a> {
     db_pool: &'a PgPool,
-    allow_email_send: AllowEmailSend<'a>,
+    allow_email_send: AllowEmailSend,
     find_user_by_email: FindUserByEmail<'a>,
     issue_email_token: IssueEmailToken,
     send_account_email: SendAccountEmail<'a>,
@@ -23,7 +23,7 @@ impl<'a> ResendVerificationEmail<'a> {
         let app_config = &app_state.app_config;
         Self {
             db_pool: &app_state.db_pool,
-            allow_email_send: AllowEmailSend::new(&app_state.db_pool),
+            allow_email_send: AllowEmailSend::new(),
             find_user_by_email: FindUserByEmail::new(&app_state.db_pool),
             issue_email_token: IssueEmailToken::new(),
             send_account_email: SendAccountEmail::new(
@@ -36,7 +36,11 @@ impl<'a> ResendVerificationEmail<'a> {
 
     pub async fn execute(&self, email: &str) -> Result<(), AuthError> {
         self.allow_email_send
-            .execute(EmailSendPurpose::VerifyEmail, email)
+            .execute(
+                &mut *self.db_pool.acquire().await?,
+                EmailSendPurpose::VerifyEmail,
+                email,
+            )
             .await?;
         let Some(unverified_user) = self
             .find_user_by_email

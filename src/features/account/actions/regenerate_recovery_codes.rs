@@ -1,9 +1,10 @@
-use sqlx::PgPool;
 use zeroize::Zeroizing;
 
 use crate::core::request_context::RequestContext;
 use crate::core::state::AppState;
-use crate::features::account::actions::confirm_identity::{ConfirmIdentity, IdentityProof};
+use crate::features::account::actions::confirm_identity::{
+    ConfirmIdentity, ConfirmedIdentity, IdentityProof,
+};
 use crate::features::account::error::AccountError;
 use crate::features::recovery_codes::actions::issue_recovery_codes::IssueRecoveryCodes;
 use crate::features::security_log::actions::record_security_event::RecordSecurityEvent;
@@ -13,7 +14,6 @@ use crate::features::security_log::entities::security_event::{
 use crate::features::sessions::entities::current_session::CurrentSession;
 
 pub struct RegenerateRecoveryCodes<'a> {
-    db_pool: &'a PgPool,
     confirm_identity: ConfirmIdentity<'a>,
     issue_recovery_codes: IssueRecoveryCodes,
     record_security_event: RecordSecurityEvent,
@@ -22,7 +22,6 @@ pub struct RegenerateRecoveryCodes<'a> {
 impl<'a> RegenerateRecoveryCodes<'a> {
     pub fn new(app_state: &'a AppState) -> Self {
         Self {
-            db_pool: &app_state.db_pool,
             confirm_identity: ConfirmIdentity::new(app_state),
             issue_recovery_codes: IssueRecoveryCodes::new(),
             record_security_event: RecordSecurityEvent::new(),
@@ -35,15 +34,12 @@ impl<'a> RegenerateRecoveryCodes<'a> {
         identity_proof: IdentityProof<'_>,
         request_context: &RequestContext,
     ) -> Result<Vec<Zeroizing<String>>, AccountError> {
-        let mut regenerate_transaction = self.db_pool.begin().await?;
-        let signed_in_user = self
+        let ConfirmedIdentity {
+            signed_in_user,
+            transaction: mut regenerate_transaction,
+        } = self
             .confirm_identity
-            .execute(
-                &mut regenerate_transaction,
-                current_session,
-                identity_proof,
-                request_context,
-            )
+            .execute(current_session, identity_proof, request_context)
             .await?;
         let recovery_codes = self
             .issue_recovery_codes

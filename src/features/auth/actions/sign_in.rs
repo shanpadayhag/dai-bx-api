@@ -48,7 +48,7 @@ pub struct SignIn<'a> {
     mark_remembered_device_used: MarkRememberedDeviceUsed,
     check_attempt_allowed: CheckAttemptAllowed<'a>,
     record_failed_attempt: RecordFailedAttempt<'a>,
-    clear_account_ip_throttle: ClearAccountIpThrottle<'a>,
+    clear_account_ip_throttle: ClearAccountIpThrottle,
     update_password_hash: UpdatePasswordHash,
     challenge_after_password: ChallengeAfterPassword<'a>,
     create_session: CreateSession,
@@ -65,7 +65,7 @@ impl<'a> SignIn<'a> {
             mark_remembered_device_used: MarkRememberedDeviceUsed::new(),
             check_attempt_allowed: CheckAttemptAllowed::new(db_pool),
             record_failed_attempt: RecordFailedAttempt::new(db_pool),
-            clear_account_ip_throttle: ClearAccountIpThrottle::new(db_pool),
+            clear_account_ip_throttle: ClearAccountIpThrottle::new(),
             update_password_hash: UpdatePasswordHash::new(),
             challenge_after_password: ChallengeAfterPassword::new(
                 &app_state.app_config.totp_keyring,
@@ -113,7 +113,7 @@ impl<'a> SignIn<'a> {
                 .await;
         }
         self.clear_account_ip_throttle
-            .execute(&throttle_attempt)
+            .execute(self.db_pool, &throttle_attempt)
             .await?;
         if password_verification.needs_rehash {
             let updated_password_hash = hash_password(sign_in_details.password).await?;
