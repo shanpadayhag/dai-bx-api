@@ -226,7 +226,7 @@ cargo sqlx prepare -- --all-targets
 - [x] Calendar and time tracking: planned and tracked events, start and finish, check-ins and working hours
 - [x] Card schedules, repeating planned events and calendar time zones
 - [x] Card triggers, move history, idle cards and the card archive
-- [ ] Group schedules and repeat follow-ups
+- [x] Group schedules and repeat follow-ups
 - [ ] Automatic scheduling
 
 See the [open issues](https://github.com/shanpadayhag/dai-bx-api/issues) for a full list of proposed features and known issues.
