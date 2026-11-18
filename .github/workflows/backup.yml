@@ -1,0 +1,72 @@
+name: Nightly backup
+
+on:
+  schedule:
+    - cron: "30 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-1
+  BACKUP_BUCKET: daibx-backups-566252491895
+  BACKUP_ROLE_ARN: arn:aws:iam::566252491895:role/daibx-backup-writer
+  POSTGRES_IMAGE: postgres:16@sha256:dd2bf3ce2dc83a81674cf7f217fcfd8a5009a4b325dda5b843bfee82a06cff6f
+
+jobs:
+  backup:
+    name: Dump, encrypt and upload
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: backup
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install age
+        run: sudo apt-get install --yes --no-install-recommends age
+
+      - name: Dump the database
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          install --directory --mode=700 "$RUNNER_TEMP/backup"
+          docker run --rm --network=host \
+            --user "$(id -u):$(id -g)" \
+            --env BACKUP_DATABASE_URL \
+            --env BACKUP_OUTPUT_DIR=/backup \
+            --volume "$RUNNER_TEMP/backup:/backup" \
+            --volume "$PWD/ops:/ops:ro" \
+            --entrypoint /ops/backup-database.sh \
+            "$POSTGRES_IMAGE"
+
+      - name: Encrypt
+        env:
+          BACKUP_AGE_PUBLIC_KEY: ${{ vars.BACKUP_AGE_PUBLIC_KEY }}
+        run: |
+          backup_name="daibx-$(tr -d ':' <"$RUNNER_TEMP/backup/started_at.txt").tar.age"
+          tar --create --directory="$RUNNER_TEMP/backup" daibx.dump rows.tsv started_at.txt \
+            | age --encrypt --recipient "$BACKUP_AGE_PUBLIC_KEY" --output "$RUNNER_TEMP/$backup_name"
+          echo "BACKUP_NAME=$backup_name" >>"$GITHUB_ENV"
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.BACKUP_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload
+        run: |
+          aws s3api put-object \
+            --bucket "$BACKUP_BUCKET" \
+            --key "backups/$BACKUP_NAME" \
+            --body "$RUNNER_TEMP/$BACKUP_NAME" \
+            --query ETag --output text >/dev/null
+          echo "Uploaded $BACKUP_NAME"
