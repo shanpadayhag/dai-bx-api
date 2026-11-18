@@ -13,6 +13,7 @@ use crate::features::account::actions::confirm_identity::IdentityProof;
 use crate::features::account::actions::delete_account::DeleteAccount;
 use crate::features::account::responses::status_response::StatusResponse;
 use crate::features::auth_challenges::entities::auth_challenge::AUTH_CHALLENGE_COOKIE_NAME;
+use crate::features::known_browsers::entities::known_browser::KNOWN_BROWSER_COOKIE_NAME;
 use crate::features::remembered_devices::entities::remembered_device::REMEMBERED_DEVICE_COOKIE_NAME;
 use crate::features::sessions::entities::current_session::CurrentSession;
 use crate::features::sessions::entities::session::{ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME};
@@ -47,6 +48,7 @@ pub async fn post_account_delete(
                 ACCESS_COOKIE_NAME,
                 REFRESH_COOKIE_NAME,
                 REMEMBERED_DEVICE_COOKIE_NAME,
+                KNOWN_BROWSER_COOKIE_NAME,
                 AUTH_CHALLENGE_COOKIE_NAME,
             ]
             .map(|cookie_name| (header::SET_COOKIE, build_expired_host_cookie(cookie_name))),

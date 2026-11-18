@@ -51,6 +51,8 @@ async fn invite_operator_is_refused_on_every_other_table(db_pool: PgPool) {
         "sessions",
         "session_tokens",
         "remembered_devices",
+        "known_browsers",
+        "pending_sign_in_alerts",
         "recovery_codes",
         "auth_throttles",
         "security_events",

@@ -6,9 +6,10 @@ use sqlx::PgPool;
 
 use crate::support::{
     STRONG_PASSWORD, SignedInPerson, build_test_app, cookie_pair, count_emails_after_a_pause,
-    find_set_cookie, get_with_cookies, latest_link_token, next_totp_code, post_json,
-    recorded_event_types, response_json, session_cookie_header, set_cookie_headers, sign_in,
-    sign_in_to_code_step, sign_up_with_authenticator, unique_email, verify_code,
+    count_known_browsers, count_pending_sign_in_alerts, find_set_cookie, get_with_cookies,
+    latest_link_token, next_totp_code, post_json, recorded_event_types, response_json,
+    session_cookie_header, set_cookie_headers, sign_in, sign_in_to_code_step,
+    sign_up_with_authenticator, unique_email, verify_code,
 };
 
 const NEW_PASSWORD: &str = "amber kettle hums beneath nine slow bridges";
@@ -117,9 +118,11 @@ async fn reset_complete_revokes_every_session_and_device_and_still_asks_for_a_co
         "__Host-daibx_access",
         "__Host-daibx_refresh",
         "__Host-daibx_device",
+        "__Host-daibx_browser",
     ] {
         assert!(find_set_cookie(&set_cookies, cleared_cookie).contains("Max-Age=0"));
     }
+    assert_eq!(count_known_browsers(&db_pool).await, 0);
     assert_eq!(
         response_json(response).await,
         json!({ "next": "enter_code" })
@@ -215,4 +218,31 @@ async fn reset_complete_keeps_the_link_usable_when_the_new_password_is_refused(d
 
     assert_eq!(weak_response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(strong_response.status(), StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn the_first_code_sign_in_after_a_reset_queues_an_alert_from_a_once_known_browser(
+    db_pool: PgPool,
+) {
+    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
+    let link_token = reset_link_token(&db_pool, &signed_in_person).await;
+    let reset_response = complete_reset(&db_pool, &link_token, NEW_PASSWORD).await;
+    let reset_challenge_cookie = cookie_pair(&find_set_cookie(
+        &set_cookie_headers(&reset_response),
+        "__Host-daibx_challenge",
+    ));
+
+    let response = verify_code(
+        &db_pool,
+        &format!(
+            "{reset_challenge_cookie}; {}",
+            signed_in_person.browser_cookie
+        ),
+        &next_totp_code(&signed_in_person.totp_secret),
+        false,
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(count_pending_sign_in_alerts(&db_pool).await, 1);
 }

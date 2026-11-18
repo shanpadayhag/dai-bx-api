@@ -98,6 +98,10 @@ mod tests {
             },
             open_signups: false,
             terms_version: String::from("test-terms-1"),
+            origin_secret: crate::core::config::origin_secret::OriginSecret::new(String::from(
+                "0123456789abcdef0123456789abcdef",
+            ))
+            .expect("the test secret is long enough"),
         }
     }
 

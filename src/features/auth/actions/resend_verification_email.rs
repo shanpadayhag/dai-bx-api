@@ -1,5 +1,6 @@
 use sqlx::PgPool;
 
+use crate::core::request_context::RequestContext;
 use crate::core::state::AppState;
 use crate::features::auth::error::AuthError;
 use crate::features::email::actions::send_account_email::SendAccountEmail;
@@ -7,6 +8,7 @@ use crate::features::email::entities::account_email::AccountEmailKind;
 use crate::features::email_tokens::actions::issue_email_token::IssueEmailToken;
 use crate::features::email_tokens::entities::email_token::EmailTokenPurpose;
 use crate::features::throttling::actions::allow_email_send::AllowEmailSend;
+use crate::features::throttling::actions::count_account_email::CountAccountEmail;
 use crate::features::throttling::entities::throttle_attempt::EmailSendPurpose;
 use crate::features::users::actions::find_user_by_email::FindUserByEmail;
 
@@ -16,6 +18,7 @@ pub struct ResendVerificationEmail<'a> {
     find_user_by_email: FindUserByEmail<'a>,
     issue_email_token: IssueEmailToken,
     send_account_email: SendAccountEmail<'a>,
+    count_account_email: CountAccountEmail,
 }
 
 impl<'a> ResendVerificationEmail<'a> {
@@ -31,15 +34,21 @@ impl<'a> ResendVerificationEmail<'a> {
                 &app_config.smtp_settings.mail_from,
                 &app_config.app_origin,
             ),
+            count_account_email: CountAccountEmail::new(),
         }
     }
 
-    pub async fn execute(&self, email: &str) -> Result<(), AuthError> {
+    pub async fn execute(
+        &self,
+        email: &str,
+        request_context: &RequestContext,
+    ) -> Result<(), AuthError> {
         self.allow_email_send
             .execute(
                 &mut *self.db_pool.acquire().await?,
                 EmailSendPurpose::VerifyEmail,
                 email,
+                request_context.client_ip,
             )
             .await?;
         let Some(unverified_user) = self
@@ -66,6 +75,9 @@ impl<'a> ResendVerificationEmail<'a> {
                 &unverified_user.email,
                 &link_token,
             )
+            .await?;
+        self.count_account_email
+            .execute(&mut resend_transaction)
             .await?;
         resend_transaction.commit().await?;
         Ok(())

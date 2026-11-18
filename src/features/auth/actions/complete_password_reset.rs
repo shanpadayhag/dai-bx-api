@@ -9,6 +9,7 @@ use crate::features::auth::actions::sign_in::SignInOutcome;
 use crate::features::auth::error::AuthError;
 use crate::features::email_tokens::actions::consume_email_token::ConsumeEmailToken;
 use crate::features::email_tokens::entities::email_token::EmailTokenPurpose;
+use crate::features::known_browsers::actions::forget_known_browsers::ForgetKnownBrowsers;
 use crate::features::password_policy::actions::check_new_password::CheckNewPassword;
 use crate::features::password_policy::entities::new_password::PasswordContext;
 use crate::features::remembered_devices::actions::forget_remembered_devices::ForgetRememberedDevices;
@@ -29,6 +30,7 @@ pub struct CompletePasswordReset<'a> {
     update_password_hash: UpdatePasswordHash,
     revoke_all_sessions: RevokeAllSessions,
     forget_remembered_devices: ForgetRememberedDevices,
+    forget_known_browsers: ForgetKnownBrowsers,
     record_security_event: RecordSecurityEvent,
     challenge_after_password: ChallengeAfterPassword<'a>,
 }
@@ -47,6 +49,7 @@ impl<'a> CompletePasswordReset<'a> {
             update_password_hash: UpdatePasswordHash::new(),
             revoke_all_sessions: RevokeAllSessions::new(),
             forget_remembered_devices: ForgetRememberedDevices::new(),
+            forget_known_browsers: ForgetKnownBrowsers::new(),
             record_security_event: RecordSecurityEvent::new(),
             challenge_after_password: ChallengeAfterPassword::new(&app_config.totp_keyring),
         }
@@ -96,6 +99,9 @@ impl<'a> CompletePasswordReset<'a> {
             .await?;
         let forgotten_device_count = self
             .forget_remembered_devices
+            .execute(&mut *reset_transaction, reset_user.id)
+            .await?;
+        self.forget_known_browsers
             .execute(&mut *reset_transaction, reset_user.id)
             .await?;
         self.record_security_event

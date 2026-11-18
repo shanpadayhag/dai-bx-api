@@ -12,6 +12,7 @@ use crate::features::security_log::entities::security_event::{
     NewSecurityEvent, SecurityEventDetails, SecurityEventType,
 };
 use crate::features::throttling::actions::allow_email_send::AllowEmailSend;
+use crate::features::throttling::actions::count_account_email::CountAccountEmail;
 use crate::features::throttling::entities::throttle_attempt::EmailSendPurpose;
 use crate::features::users::actions::find_user_by_email::FindUserByEmail;
 
@@ -22,6 +23,7 @@ pub struct RequestPasswordReset<'a> {
     issue_email_token: IssueEmailToken,
     send_account_email: SendAccountEmail<'a>,
     record_security_event: RecordSecurityEvent,
+    count_account_email: CountAccountEmail,
 }
 
 impl<'a> RequestPasswordReset<'a> {
@@ -38,6 +40,7 @@ impl<'a> RequestPasswordReset<'a> {
                 &app_config.app_origin,
             ),
             record_security_event: RecordSecurityEvent::new(),
+            count_account_email: CountAccountEmail::new(),
         }
     }
 
@@ -51,6 +54,7 @@ impl<'a> RequestPasswordReset<'a> {
                 &mut *self.db_pool.acquire().await?,
                 EmailSendPurpose::PasswordReset,
                 email,
+                request_context.client_ip,
             )
             .await?;
         let found_user = self.find_user_by_email.execute(email).await?;
@@ -86,6 +90,9 @@ impl<'a> RequestPasswordReset<'a> {
                     &reset_user.email,
                     &link_token,
                 )
+                .await?;
+            self.count_account_email
+                .execute(&mut request_transaction)
                 .await?;
         }
         request_transaction.commit().await?;

@@ -112,6 +112,36 @@ impl IntoResponse for AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::logging::test_capture::capture_logs;
+
+    struct ErrorWithPrivateDetail;
+
+    impl std::fmt::Display for ErrorWithPrivateDetail {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("the query failed")
+        }
+    }
+
+    impl std::fmt::Debug for ErrorWithPrivateDetail {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("Key (email)=(private.person@daibx.test) already exists")
+        }
+    }
+
+    impl std::error::Error for ErrorWithPrivateDetail {}
+
+    #[test]
+    fn logs_an_internal_error_without_its_debug_detail() {
+        let (captured_logs, _subscriber_guard) = capture_logs();
+
+        let response =
+            AppError::Internal(anyhow::Error::new(ErrorWithPrivateDetail)).into_response();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let log_text = captured_logs.text();
+        assert!(log_text.contains("the query failed"));
+        assert!(!log_text.contains("private.person"));
+    }
 
     #[test]
     fn answers_too_many_requests_with_429_and_a_retry_after_header() {

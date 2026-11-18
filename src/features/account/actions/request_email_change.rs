@@ -12,6 +12,7 @@ use crate::features::email_tokens::actions::issue_email_token::IssueEmailToken;
 use crate::features::email_tokens::entities::email_token::EmailTokenPurpose;
 use crate::features::sessions::entities::current_session::CurrentSession;
 use crate::features::throttling::actions::allow_email_send::AllowEmailSend;
+use crate::features::throttling::actions::count_account_email::CountAccountEmail;
 use crate::features::throttling::entities::throttle_attempt::EmailSendPurpose;
 use crate::features::users::actions::is_email_taken::IsEmailTaken;
 
@@ -27,6 +28,7 @@ pub struct RequestEmailChange<'a> {
     allow_email_send: AllowEmailSend,
     issue_email_token: IssueEmailToken,
     send_account_email: SendAccountEmail<'a>,
+    count_account_email: CountAccountEmail,
 }
 
 impl<'a> RequestEmailChange<'a> {
@@ -42,6 +44,7 @@ impl<'a> RequestEmailChange<'a> {
                 &app_config.smtp_settings.mail_from,
                 &app_config.app_origin,
             ),
+            count_account_email: CountAccountEmail::new(),
         }
     }
 
@@ -76,6 +79,7 @@ impl<'a> RequestEmailChange<'a> {
                 &mut request_transaction,
                 EmailSendPurpose::ChangeEmail,
                 email_change_request.new_email,
+                None,
             )
             .await?;
         let is_address_taken = self
@@ -98,6 +102,9 @@ impl<'a> RequestEmailChange<'a> {
                     email_change_request.new_email,
                     &link_token,
                 )
+                .await?;
+            self.count_account_email
+                .execute(&mut request_transaction)
                 .await?;
         }
         request_transaction.commit().await?;

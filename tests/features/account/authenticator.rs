@@ -5,10 +5,11 @@ use serde_json::json;
 use sqlx::PgPool;
 
 use crate::support::{
-    STRONG_PASSWORD, SignedInPerson, build_test_app, cookie_pair, current_totp_code,
-    find_set_cookie, get_with_cookies, next_totp_code, post_json_with_cookies,
-    read_pending_totp_secret, recorded_event_types, response_json, session_cookie_header,
-    set_cookie_headers, sign_in, sign_in_to_code_step, sign_up_with_authenticator, verify_code,
+    STRONG_PASSWORD, SignedInPerson, build_test_app, cookie_pair, count_known_browsers,
+    count_pending_sign_in_alerts, current_totp_code, find_set_cookie, get_with_cookies,
+    next_totp_code, post_json_with_cookies, read_pending_totp_secret, recorded_event_types,
+    response_json, session_cookie_header, set_cookie_headers, sign_in, sign_in_to_code_step,
+    sign_up_with_authenticator, verify_code,
 };
 
 async fn start_replacement(
@@ -98,9 +99,14 @@ async fn replacing_with_a_recovery_code_swaps_the_secret_and_ends_other_sessions
 
     assert_eq!(response.status(), StatusCode::OK);
     let set_cookies = set_cookie_headers(&response);
-    for cleared_cookie in ["__Host-daibx_challenge", "__Host-daibx_device"] {
+    for cleared_cookie in [
+        "__Host-daibx_challenge",
+        "__Host-daibx_device",
+        "__Host-daibx_browser",
+    ] {
         assert!(find_set_cookie(&set_cookies, cleared_cookie).contains("Max-Age=0"));
     }
+    assert_eq!(count_known_browsers(&db_pool).await, 0);
     assert_eq!(
         response_json(response).await,
         json!({ "status": "authenticator_replaced" })
@@ -214,4 +220,33 @@ async fn the_setup_confirm_endpoint_does_not_accept_a_replacement_step(db_pool: 
     .await;
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test]
+async fn the_first_code_sign_in_after_a_replacement_queues_an_alert_from_a_once_known_browser(
+    db_pool: PgPool,
+) {
+    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
+    let replacement_cookie = replacement_challenge(&db_pool, &signed_in_person).await;
+    let new_totp_secret = read_pending_totp_secret(&db_pool, &replacement_cookie).await;
+    let replacement_response = confirm_replacement(
+        &db_pool,
+        &signed_in_person,
+        &replacement_cookie,
+        &current_totp_code(&new_totp_secret),
+    )
+    .await;
+    assert_eq!(replacement_response.status(), StatusCode::OK);
+    let challenge_cookie = sign_in_to_code_step(&db_pool, &signed_in_person.email).await;
+
+    let response = verify_code(
+        &db_pool,
+        &format!("{challenge_cookie}; {}", signed_in_person.browser_cookie),
+        &next_totp_code(&new_totp_secret),
+        false,
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(count_pending_sign_in_alerts(&db_pool).await, 1);
 }

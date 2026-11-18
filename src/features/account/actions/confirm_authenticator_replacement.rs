@@ -9,6 +9,7 @@ use crate::features::account::error::AccountError;
 use crate::features::auth_challenges::actions::claim_auth_challenge_attempt::ClaimAuthChallengeAttempt;
 use crate::features::auth_challenges::actions::delete_auth_challenge::DeleteAuthChallenge;
 use crate::features::auth_challenges::entities::auth_challenge::AuthChallengePurpose;
+use crate::features::known_browsers::actions::forget_known_browsers::ForgetKnownBrowsers;
 use crate::features::remembered_devices::actions::forget_remembered_devices::ForgetRememberedDevices;
 use crate::features::security_log::actions::record_security_event::RecordSecurityEvent;
 use crate::features::security_log::entities::security_event::{
@@ -29,6 +30,7 @@ pub struct ConfirmAuthenticatorReplacement<'a> {
     replace_totp_secret: ReplaceTotpSecret,
     revoke_other_sessions: RevokeOtherSessions,
     forget_remembered_devices: ForgetRememberedDevices,
+    forget_known_browsers: ForgetKnownBrowsers,
     record_security_event: RecordSecurityEvent,
 }
 
@@ -43,6 +45,7 @@ impl<'a> ConfirmAuthenticatorReplacement<'a> {
             replace_totp_secret: ReplaceTotpSecret::new(),
             revoke_other_sessions: RevokeOtherSessions::new(),
             forget_remembered_devices: ForgetRememberedDevices::new(),
+            forget_known_browsers: ForgetKnownBrowsers::new(),
             record_security_event: RecordSecurityEvent::new(),
         }
     }
@@ -115,6 +118,9 @@ impl<'a> ConfirmAuthenticatorReplacement<'a> {
             .await?;
         let forgotten_device_count = self
             .forget_remembered_devices
+            .execute(&mut *confirm_transaction, current_session.user_id)
+            .await?;
+        self.forget_known_browsers
             .execute(&mut *confirm_transaction, current_session.user_id)
             .await?;
         let signed_in_user = self

@@ -4,6 +4,20 @@ use crate::features::password_policy::entities::new_password::{
 };
 
 #[derive(Debug, thiserror::Error)]
+pub enum PwnedPasswordsError {
+    #[error("the breach lookup failed: {0}")]
+    Request(reqwest::Error),
+    #[error("the breach lookup answered with status {0}")]
+    UnexpectedStatus(reqwest::StatusCode),
+}
+
+impl From<reqwest::Error> for PwnedPasswordsError {
+    fn from(request_error: reqwest::Error) -> Self {
+        Self::Request(request_error.without_url())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum PasswordPolicyError {
     #[error("password rejected: {0:?}")]
     Rejected(PasswordRejection),

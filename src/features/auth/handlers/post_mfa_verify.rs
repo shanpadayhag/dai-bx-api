@@ -11,6 +11,9 @@ use crate::core::state::AppState;
 use crate::features::auth::actions::verify_sign_in_code::{SignInCodeEntry, VerifySignInCode};
 use crate::features::auth::responses::signed_in_response::SignedInResponse;
 use crate::features::auth_challenges::entities::auth_challenge::AUTH_CHALLENGE_COOKIE_NAME;
+use crate::features::known_browsers::entities::known_browser::{
+    KNOWN_BROWSER_COOKIE_NAME, KNOWN_BROWSER_VALID_FOR_SECONDS,
+};
 use crate::features::remembered_devices::entities::remembered_device::{
     REMEMBERED_DEVICE_COOKIE_NAME, REMEMBERED_DEVICE_VALID_FOR_SECONDS,
 };
@@ -39,6 +42,7 @@ pub async fn post_mfa_verify(
                 challenge_token,
                 entered_code: verify_request.code.trim(),
                 should_remember_device: verify_request.remember_device,
+                presented_browser_token: read_cookie(&request_headers, KNOWN_BROWSER_COOKIE_NAME),
             },
             &request_context,
             &presented_session,
@@ -49,6 +53,11 @@ pub async fn post_mfa_verify(
         access_cookie,
         refresh_cookie,
         build_expired_host_cookie(AUTH_CHALLENGE_COOKIE_NAME),
+        build_host_cookie(
+            KNOWN_BROWSER_COOKIE_NAME,
+            &verified_sign_in.browser_token,
+            KNOWN_BROWSER_VALID_FOR_SECONDS,
+        ),
     ];
     if let Some(device_token) = &verified_sign_in.device_token {
         set_cookie_values.push(build_host_cookie(

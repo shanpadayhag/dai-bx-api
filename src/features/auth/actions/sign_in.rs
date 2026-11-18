@@ -8,6 +8,7 @@ use crate::core::security::password_hash::{
 use crate::core::state::AppState;
 use crate::features::auth::actions::challenge_after_password::ChallengeAfterPassword;
 use crate::features::auth::error::AuthError;
+use crate::features::known_browsers::actions::recognize_browser::RecognizeBrowser;
 use crate::features::remembered_devices::actions::find_remembered_device::FindRememberedDevice;
 use crate::features::remembered_devices::actions::mark_remembered_device_used::MarkRememberedDeviceUsed;
 use crate::features::remembered_devices::entities::remembered_device::RememberedDevice;
@@ -32,13 +33,21 @@ pub struct SignInDetails<'a> {
     pub email: &'a str,
     pub password: Zeroizing<String>,
     pub device_token: Option<&'a str>,
+    pub presented_browser_token: Option<&'a str>,
 }
 
 pub enum SignInOutcome {
     VerifyEmail,
-    SetUpAuthenticator { challenge_token: Zeroizing<String> },
-    EnterCode { challenge_token: Zeroizing<String> },
-    SignedIn { session_tokens: IssuedSessionTokens },
+    SetUpAuthenticator {
+        challenge_token: Zeroizing<String>,
+    },
+    EnterCode {
+        challenge_token: Zeroizing<String>,
+    },
+    SignedIn {
+        session_tokens: IssuedSessionTokens,
+        browser_token: Zeroizing<String>,
+    },
 }
 
 pub struct SignIn<'a> {
@@ -52,6 +61,7 @@ pub struct SignIn<'a> {
     update_password_hash: UpdatePasswordHash,
     challenge_after_password: ChallengeAfterPassword<'a>,
     create_session: CreateSession,
+    recognize_browser: RecognizeBrowser,
     record_security_event: RecordSecurityEvent,
 }
 
@@ -71,6 +81,7 @@ impl<'a> SignIn<'a> {
                 &app_state.app_config.totp_keyring,
             ),
             create_session: CreateSession::new(),
+            recognize_browser: RecognizeBrowser::new(),
             record_security_event: RecordSecurityEvent::new(),
         }
     }
@@ -144,6 +155,14 @@ impl<'a> SignIn<'a> {
         self.mark_remembered_device_used
             .execute(&mut *sign_in_transaction, remembered_device.id)
             .await?;
+        let recognized_browser = self
+            .recognize_browser
+            .execute(
+                &mut sign_in_transaction,
+                found_user.id,
+                sign_in_details.presented_browser_token,
+            )
+            .await?;
         self.record_security_event
             .execute(
                 &mut *sign_in_transaction,
@@ -158,7 +177,10 @@ impl<'a> SignIn<'a> {
             )
             .await?;
         sign_in_transaction.commit().await?;
-        Ok(SignInOutcome::SignedIn { session_tokens })
+        Ok(SignInOutcome::SignedIn {
+            session_tokens,
+            browser_token: recognized_browser.browser_token,
+        })
     }
 
     async fn remembered_device_for(

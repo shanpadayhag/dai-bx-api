@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::core::cookie::read_cookie;
 use crate::core::error::AppError;
+use crate::core::middlewares::refusal_log::RequestAccount;
 use crate::core::state::AppState;
 use crate::features::sessions::actions::find_active_session::FindActiveSession;
 use crate::features::sessions::entities::session::ACCESS_COOKIE_NAME;
@@ -27,6 +28,9 @@ impl FromRequestParts<AppState> for CurrentSession {
             .execute(&app_state.db_pool, access_token)
             .await?
             .ok_or(AppError::Unauthorized)?;
+        if let Some(request_account) = request_parts.extensions.get::<RequestAccount>() {
+            request_account.record(active_session.security_ref);
+        }
         Ok(Self {
             session_id: active_session.session_id,
             user_id: active_session.user_id,

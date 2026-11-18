@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use reqwest::Client;
+use reqwest::{Client, redirect};
 
 const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const HTTP_USER_AGENT: &str = "DaiBX-API";
@@ -10,6 +10,7 @@ pub fn build_http_client() -> Client {
     Client::builder()
         .connect_timeout(HTTP_CONNECT_TIMEOUT)
         .user_agent(HTTP_USER_AGENT)
+        .redirect(redirect::Policy::none())
         .build()
         .expect("the HTTP client must build")
 }

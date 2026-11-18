@@ -75,7 +75,7 @@ impl AccountEmailKind {
     }
 }
 
-fn escape_html(plain_text: &str) -> String {
+pub fn escape_html(plain_text: &str) -> String {
     plain_text
         .chars()
         .map(|text_character| match text_character {
@@ -93,7 +93,7 @@ fn escape_html(plain_text: &str) -> String {
 mod tests {
     use super::*;
 
-    const LINK: &str = "https://dai-bx-web.vercel.app/verify-email?token=abc_DEF-123&x=1";
+    const LINK: &str = "https://dai-bx-web.vercel.app/verify-email#token=abc_DEF-123&x=1";
 
     #[test]
     fn points_each_kind_at_its_own_page() {
@@ -148,7 +148,7 @@ mod tests {
         let outgoing_email = AccountEmailKind::VerifyEmail.compose("you@example.com", LINK);
 
         assert!(outgoing_email.html_body.contains(
-            "href=\"https://dai-bx-web.vercel.app/verify-email?token=abc_DEF-123&amp;x=1\""
+            "href=\"https://dai-bx-web.vercel.app/verify-email#token=abc_DEF-123&amp;x=1\""
         ));
         assert!(!outgoing_email.html_body.contains("&x=1"));
     }

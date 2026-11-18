@@ -9,6 +9,7 @@ use crate::features::auth_challenges::actions::claim_auth_challenge_attempt::Cla
 use crate::features::auth_challenges::actions::delete_auth_challenge::DeleteAuthChallenge;
 use crate::features::auth_challenges::actions::find_active_auth_challenge::FindActiveAuthChallenge;
 use crate::features::auth_challenges::entities::auth_challenge::AuthChallengePurpose;
+use crate::features::known_browsers::actions::recognize_browser::RecognizeBrowser;
 use crate::features::remembered_devices::actions::remember_device::RememberDevice;
 use crate::features::security_log::actions::record_security_event::RecordSecurityEvent;
 use crate::features::security_log::entities::security_event::{
@@ -17,6 +18,8 @@ use crate::features::security_log::entities::security_event::{
 use crate::features::sessions::actions::create_session::CreateSession;
 use crate::features::sessions::entities::presented_session::PresentedSession;
 use crate::features::sessions::entities::session::IssuedSessionTokens;
+use crate::features::sign_in_alerts::actions::queue_sign_in_alert::QueueSignInAlert;
+use crate::features::sign_in_alerts::entities::sign_in_alert::NewSignInAlert;
 use crate::features::throttling::actions::check_attempt_allowed::CheckAttemptAllowed;
 use crate::features::throttling::actions::clear_account_ip_throttle::ClearAccountIpThrottle;
 use crate::features::throttling::actions::record_failed_attempt::RecordFailedAttempt;
@@ -30,11 +33,13 @@ pub struct SignInCodeEntry<'a> {
     pub challenge_token: &'a str,
     pub entered_code: &'a str,
     pub should_remember_device: bool,
+    pub presented_browser_token: Option<&'a str>,
 }
 
 pub struct VerifiedSignIn {
     pub session_tokens: IssuedSessionTokens,
     pub device_token: Option<Zeroizing<String>>,
+    pub browser_token: Zeroizing<String>,
     pub remaining_recovery_codes: Option<i64>,
 }
 
@@ -50,6 +55,8 @@ pub struct VerifySignInCode<'a> {
     clear_account_ip_throttle: ClearAccountIpThrottle,
     create_session: CreateSession,
     remember_device: RememberDevice,
+    recognize_browser: RecognizeBrowser,
+    queue_sign_in_alert: QueueSignInAlert,
     record_security_event: RecordSecurityEvent,
 }
 
@@ -68,6 +75,8 @@ impl<'a> VerifySignInCode<'a> {
             clear_account_ip_throttle: ClearAccountIpThrottle::new(),
             create_session: CreateSession::new(),
             remember_device: RememberDevice::new(),
+            recognize_browser: RecognizeBrowser::new(),
+            queue_sign_in_alert: QueueSignInAlert::new(),
             record_security_event: RecordSecurityEvent::new(),
         }
     }
@@ -163,6 +172,26 @@ impl<'a> VerifySignInCode<'a> {
         } else {
             None
         };
+        let recognized_browser = self
+            .recognize_browser
+            .execute(
+                &mut verify_transaction,
+                challenged_user.id,
+                code_entry.presented_browser_token,
+            )
+            .await?;
+        if !recognized_browser.was_already_known || accepted_factor.is_recovery_code() {
+            self.queue_sign_in_alert
+                .execute(
+                    &mut *verify_transaction,
+                    &NewSignInAlert {
+                        user_id: challenged_user.id,
+                        user_agent: request_context.user_agent.as_deref(),
+                        sign_in_method: accepted_factor.method_name(),
+                    },
+                )
+                .await?;
+        }
         let remaining_recovery_codes = accepted_factor.remaining_recovery_codes();
         self.record(
             &mut verify_transaction,
@@ -191,6 +220,7 @@ impl<'a> VerifySignInCode<'a> {
         Ok(VerifiedSignIn {
             session_tokens,
             device_token,
+            browser_token: recognized_browser.browser_token,
             remaining_recovery_codes,
         })
     }

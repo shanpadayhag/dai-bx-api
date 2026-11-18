@@ -26,7 +26,10 @@
                 "signed_out_everywhere",
                 "refresh_token_reuse_detected",
                 "invite_used",
-                "account_deleted"
+                "account_deleted",
+                "sign_in_alert_sent",
+                "sign_in_alert_failed",
+                "email_cap_reached"
               ]
             }
           }

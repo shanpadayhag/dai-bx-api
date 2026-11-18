@@ -27,6 +27,9 @@ pub enum SecurityEventType {
     RefreshTokenReuseDetected,
     InviteUsed,
     AccountDeleted,
+    SignInAlertSent,
+    SignInAlertFailed,
+    EmailCapReached,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

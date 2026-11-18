@@ -6,6 +6,7 @@ use crate::features::auth::error::AuthError;
 use crate::features::auth_challenges::error::AuthChallengeError;
 use crate::features::email::error::EmailError;
 use crate::features::email_tokens::error::EmailTokenError;
+use crate::features::known_browsers::error::KnownBrowserError;
 use crate::features::password_policy::error::PasswordPolicyError;
 use crate::features::recovery_codes::error::RecoveryCodeError;
 use crate::features::remembered_devices::error::RememberedDeviceError;
@@ -66,6 +67,7 @@ account_error_from_internal!(
     EmailError,
     EmailTokenError,
     ForbiddenDetail,
+    KnownBrowserError,
     PasswordHashError,
     RecoveryCodeError,
     RememberedDeviceError,

@@ -34,7 +34,7 @@ fn instant_of(instant_json: &serde_json::Value) -> UtcInstant {
     UtcInstant::parse(instant_json.as_str().expect("a time")).expect("a valid time")
 }
 
-fn minutes_from_now(minute_count: i64) -> String {
+pub fn minutes_from_now(minute_count: i64) -> String {
     UtcInstant::now().plus_minutes(minute_count).to_iso_text()
 }
 

@@ -71,7 +71,7 @@ async fn create_prints_a_code_that_redeems_using_only_the_operator_role(db_pool:
     let stdout_text = String::from_utf8_lossy(&cli_output.stdout);
     assert!(stdout_text.contains("Expires: ") && stdout_text.contains(" UTC"));
     let invite_code = printed_invite_code(&cli_output);
-    assert_eq!(invite_code.len(), 19);
+    assert_eq!(invite_code.len(), 32);
     let redeeming_user_id = seed_redeeming_user(&db_pool).await;
     RedeemInvite::new()
         .execute(&db_pool, &invite_code, redeeming_user_id)

@@ -12,7 +12,7 @@ use crate::features::account::entities::time_tracking_settings::{
     validate_clock_time,
 };
 use crate::features::account::responses::time_tracking_settings_response::TimeTrackingSettingsResponse;
-use crate::features::sessions::entities::current_session::CurrentSession;
+use crate::features::throttling::entities::write_session::WriteSession;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,7 +30,7 @@ pub struct PatchTimeTrackingRequest {
 
 pub async fn patch_account_time_tracking(
     State(app_state): State<AppState>,
-    current_session: CurrentSession,
+    write_session: WriteSession,
     Json(patch_request): Json<PatchTimeTrackingRequest>,
 ) -> Result<Json<TimeTrackingSettingsResponse>, AppError> {
     let time_tracking_changes = TimeTrackingChanges {
@@ -76,7 +76,7 @@ pub async fn patch_account_time_tracking(
     let time_tracking_settings = UpdateTimeTrackingSettings::new()
         .execute(
             &app_state.db_pool,
-            current_session.user_id,
+            write_session.user_id,
             &time_tracking_changes,
         )
         .await?;

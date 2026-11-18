@@ -18,6 +18,9 @@ use crate::features::security_log::actions::record_security_event::RecordSecurit
 use crate::features::security_log::entities::security_event::{
     NewSecurityEvent, SecurityEventDetails, SecurityEventType,
 };
+use crate::features::throttling::actions::allow_email_send::AllowEmailSend;
+use crate::features::throttling::actions::count_account_email::CountAccountEmail;
+use crate::features::throttling::entities::throttle_attempt::EmailSendPurpose;
 use crate::features::users::actions::create_user::CreateUser;
 use crate::features::users::entities::user::{NewUser, User};
 
@@ -32,6 +35,8 @@ pub struct SignUp<'a> {
     db_pool: &'a PgPool,
     is_open_signup: bool,
     terms_version: &'a str,
+    allow_email_send: AllowEmailSend,
+    count_account_email: CountAccountEmail,
     check_new_password: CheckNewPassword<'a>,
     send_account_email: SendAccountEmail<'a>,
     create_user: CreateUser,
@@ -49,6 +54,8 @@ impl<'a> SignUp<'a> {
             db_pool: &app_state.db_pool,
             is_open_signup: app_config.open_signups,
             terms_version: &app_config.terms_version,
+            allow_email_send: AllowEmailSend::new(),
+            count_account_email: CountAccountEmail::new(),
             check_new_password: CheckNewPassword::new(
                 &app_state.http_client,
                 &app_config.hibp_api_base_url,
@@ -72,6 +79,14 @@ impl<'a> SignUp<'a> {
         sign_up_details: SignUpDetails<'_>,
         request_context: &RequestContext,
     ) -> Result<(), AuthError> {
+        self.allow_email_send
+            .execute(
+                &mut *self.db_pool.acquire().await?,
+                EmailSendPurpose::VerifyEmail,
+                sign_up_details.email,
+                request_context.client_ip,
+            )
+            .await?;
         let invite_code = self.required_invite_code(sign_up_details.invite_code)?;
         self.check_new_password
             .execute(
@@ -142,6 +157,9 @@ impl<'a> SignUp<'a> {
                 &created_user.email,
                 &link_token,
             )
+            .await?;
+        self.count_account_email
+            .execute(&mut sign_up_transaction)
             .await?;
         sign_up_transaction.commit().await?;
         Ok(())
@@ -226,6 +244,10 @@ mod tests {
                 smtp_settings,
                 open_signups: false,
                 terms_version: String::from("test-terms-1"),
+                origin_secret: crate::core::config::origin_secret::OriginSecret::new(String::from(
+                    "0123456789abcdef0123456789abcdef",
+                ))
+                .expect("the test secret is long enough"),
             }),
         }
     }

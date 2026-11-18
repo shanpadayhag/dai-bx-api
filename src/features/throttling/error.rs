@@ -1,4 +1,5 @@
 use crate::core::error::AppError;
+use crate::features::security_log::error::SecurityLogError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ThrottleError {
@@ -6,6 +7,14 @@ pub enum ThrottleError {
     Blocked { retry_after_seconds: u64 },
     #[error(transparent)]
     Database(#[from] sqlx::Error),
+}
+
+impl From<SecurityLogError> for ThrottleError {
+    fn from(security_log_error: SecurityLogError) -> Self {
+        match security_log_error {
+            SecurityLogError::Database(database_error) => ThrottleError::Database(database_error),
+        }
+    }
 }
 
 impl From<ThrottleError> for AppError {

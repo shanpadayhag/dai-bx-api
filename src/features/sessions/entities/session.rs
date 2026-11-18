@@ -93,4 +93,5 @@ impl RevokedReason {
 pub struct ActiveSession {
     pub session_id: Uuid,
     pub user_id: Uuid,
+    pub security_ref: Uuid,
 }

@@ -1,10 +1,12 @@
 pub mod clock;
 pub mod config;
 pub mod cookie;
+pub mod database;
 pub mod error;
 pub mod http_client;
 pub mod idle_length;
 pub mod json_field;
+pub mod logging;
 pub mod mail_transport;
 pub mod middlewares;
 pub mod recurrence;

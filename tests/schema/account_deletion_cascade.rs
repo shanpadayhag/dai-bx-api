@@ -2,12 +2,14 @@ use sqlx::PgPool;
 
 use crate::support::{count_rows, random_hash, seed_session, seed_user};
 
-const USER_OWNED_TABLES: [&str; 7] = [
+const USER_OWNED_TABLES: [&str; 9] = [
     "email_tokens",
     "auth_challenges",
     "sessions",
     "session_tokens",
     "remembered_devices",
+    "known_browsers",
+    "pending_sign_in_alerts",
     "recovery_codes",
     "users",
 ];
@@ -62,6 +64,23 @@ async fn deleting_a_user_removes_every_row_they_own(db_pool: PgPool) {
     .execute(&db_pool)
     .await
     .expect("recovery code insert should succeed");
+    sqlx::query(
+        "INSERT INTO known_browsers (id, user_id, token_hash, expires_at)
+         VALUES (gen_random_uuid(), $1, $2, now() + interval '1 year')",
+    )
+    .bind(user_id)
+    .bind(random_hash())
+    .execute(&db_pool)
+    .await
+    .expect("known browser insert should succeed");
+    sqlx::query(
+        "INSERT INTO pending_sign_in_alerts (id, user_id, signed_in_at, sign_in_method)
+         VALUES (gen_random_uuid(), $1, now(), 'authenticator')",
+    )
+    .bind(user_id)
+    .execute(&db_pool)
+    .await
+    .expect("pending alert insert should succeed");
 
     sqlx::query("DELETE FROM users WHERE id = $1")
         .bind(user_id)

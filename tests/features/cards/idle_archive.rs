@@ -11,14 +11,15 @@ use crate::card_schedules::create::read_card;
 use crate::cards::create::{board_with_cards, card_id};
 use crate::cards::history::{move_shapes, read_history};
 use crate::support::{
-    SignedInPerson, build_test_app, patch_json_with_cookies, sign_up_with_authenticator,
+    SignedInPerson, build_test_app, patch_json_with_cookies, production_sized_pool,
+    sign_up_with_authenticator,
 };
 use crate::tracking::start::start_card;
 
 const LAST_MOVED_AT: &str = "2030-01-10T08:00:00Z";
 
 async fn call_scheduler(db_pool: &PgPool, now_text: &str) -> IdleArchiveTally {
-    ArchiveIdleCards::new(db_pool)
+    ArchiveIdleCards::new(&production_sized_pool(db_pool))
         .execute(UtcInstant::parse(now_text).expect("a valid test time"))
         .await
         .expect("the idle archive call should run")

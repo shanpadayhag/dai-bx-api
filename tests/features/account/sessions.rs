@@ -5,10 +5,10 @@ use serde_json::json;
 use sqlx::PgPool;
 
 use crate::support::{
-    STRONG_PASSWORD, SignedInPerson, build_test_app, cookie_pair, find_set_cookie,
-    get_with_cookies, next_totp_code, post_json_with_cookies, recorded_event_types, response_json,
-    session_cookie_header, set_cookie_headers, sign_in, sign_in_to_code_step,
-    sign_up_with_authenticator, verify_code,
+    STRONG_PASSWORD, SignedInPerson, build_test_app, cookie_pair, count_known_browsers,
+    find_set_cookie, get_with_cookies, next_totp_code, post_json_with_cookies,
+    recorded_event_types, response_json, session_cookie_header, set_cookie_headers, sign_in,
+    sign_in_to_code_step, sign_up_with_authenticator, verify_code,
 };
 
 const WRONG_PASSWORD: &str = "seven quiet docks drift past a violet lantern";
@@ -236,9 +236,11 @@ async fn ending_every_session_needs_the_password_and_forgets_remembered_devices(
         "__Host-daibx_access",
         "__Host-daibx_refresh",
         "__Host-daibx_device",
+        "__Host-daibx_browser",
     ] {
         assert!(find_set_cookie(&set_cookies, cookie_name).contains("Max-Age=0"));
     }
+    assert_eq!(count_known_browsers(&db_pool).await, 0);
     assert_eq!(
         response_json(response).await,
         json!({ "status": "signed_out" })

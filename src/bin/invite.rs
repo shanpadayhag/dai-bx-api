@@ -2,6 +2,7 @@ use std::env;
 use std::process::ExitCode;
 use std::time::Duration;
 
+use daibx_api::core::database::database_connect_options;
 use daibx_api::features::invites::actions::create_invite::CreateInvite;
 use sqlx::postgres::PgPoolOptions;
 
@@ -32,10 +33,12 @@ async fn main() -> ExitCode {
 }
 
 async fn create_invite(invite_database_url: &str) -> Result<(), String> {
+    let connect_options = database_connect_options(invite_database_url)
+        .map_err(|address_error| address_error.to_string())?;
     let operator_pool = PgPoolOptions::new()
         .max_connections(1)
         .acquire_timeout(DATABASE_ACQUIRE_TIMEOUT)
-        .connect(invite_database_url)
+        .connect_with(connect_options)
         .await
         .map_err(|connect_error| connect_error.to_string())?;
     let created_invite = CreateInvite::new(&operator_pool)

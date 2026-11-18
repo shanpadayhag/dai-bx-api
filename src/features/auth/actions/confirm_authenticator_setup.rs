@@ -10,6 +10,7 @@ use crate::features::auth::error::AuthError;
 use crate::features::auth_challenges::actions::claim_auth_challenge_attempt::ClaimAuthChallengeAttempt;
 use crate::features::auth_challenges::actions::delete_auth_challenge::DeleteAuthChallenge;
 use crate::features::auth_challenges::entities::auth_challenge::AuthChallengePurpose;
+use crate::features::known_browsers::actions::recognize_browser::RecognizeBrowser;
 use crate::features::recovery_codes::actions::issue_recovery_codes::IssueRecoveryCodes;
 use crate::features::security_log::actions::record_security_event::RecordSecurityEvent;
 use crate::features::security_log::entities::security_event::{
@@ -24,6 +25,7 @@ use crate::features::users::actions::find_user_by_id::FindUserById;
 pub struct ConfirmedAuthenticatorSetup {
     pub session_tokens: IssuedSessionTokens,
     pub recovery_codes: Vec<Zeroizing<String>>,
+    pub browser_token: Zeroizing<String>,
 }
 
 pub struct ConfirmAuthenticatorSetup<'a> {
@@ -35,6 +37,7 @@ pub struct ConfirmAuthenticatorSetup<'a> {
     find_user_by_id: FindUserById,
     issue_recovery_codes: IssueRecoveryCodes,
     create_session: CreateSession,
+    recognize_browser: RecognizeBrowser,
     record_security_event: RecordSecurityEvent,
 }
 
@@ -49,6 +52,7 @@ impl<'a> ConfirmAuthenticatorSetup<'a> {
             find_user_by_id: FindUserById::new(),
             issue_recovery_codes: IssueRecoveryCodes::new(),
             create_session: CreateSession::new(),
+            recognize_browser: RecognizeBrowser::new(),
             record_security_event: RecordSecurityEvent::new(),
         }
     }
@@ -59,6 +63,7 @@ impl<'a> ConfirmAuthenticatorSetup<'a> {
         entered_code: &str,
         request_context: &RequestContext,
         presented_session: &PresentedSession,
+        presented_browser_token: Option<&str>,
     ) -> Result<ConfirmedAuthenticatorSetup, AuthError> {
         let is_well_formed_code = entered_code.len() == TOTP_DIGIT_COUNT
             && entered_code
@@ -132,6 +137,14 @@ impl<'a> ConfirmAuthenticatorSetup<'a> {
                 presented_session,
             )
             .await?;
+        let recognized_browser = self
+            .recognize_browser
+            .execute(
+                &mut confirm_transaction,
+                set_up_user.id,
+                presented_browser_token,
+            )
+            .await?;
         self.record_security_event
             .execute(
                 &mut *confirm_transaction,
@@ -148,6 +161,7 @@ impl<'a> ConfirmAuthenticatorSetup<'a> {
         Ok(ConfirmedAuthenticatorSetup {
             session_tokens,
             recovery_codes,
+            browser_token: recognized_browser.browser_token,
         })
     }
 }

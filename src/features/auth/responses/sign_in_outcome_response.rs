@@ -8,6 +8,9 @@ use crate::features::auth::responses::next_step_response::NextStepResponse;
 use crate::features::auth_challenges::entities::auth_challenge::{
     AUTH_CHALLENGE_COOKIE_NAME, AUTH_CHALLENGE_VALID_FOR_SECONDS,
 };
+use crate::features::known_browsers::entities::known_browser::{
+    KNOWN_BROWSER_COOKIE_NAME, KNOWN_BROWSER_VALID_FOR_SECONDS,
+};
 
 pub fn sign_in_outcome_response(
     sign_in_outcome: SignInOutcome,
@@ -23,8 +26,16 @@ pub fn sign_in_outcome_response(
             set_cookie_values.push(challenge_cookie(&challenge_token));
             NextStepResponse::enter_code()
         }
-        SignInOutcome::SignedIn { session_tokens } => {
+        SignInOutcome::SignedIn {
+            session_tokens,
+            browser_token,
+        } => {
             set_cookie_values.extend(session_tokens.to_set_cookie_values());
+            set_cookie_values.push(build_host_cookie(
+                KNOWN_BROWSER_COOKIE_NAME,
+                &browser_token,
+                KNOWN_BROWSER_VALID_FOR_SECONDS,
+            ));
             NextStepResponse::signed_in()
         }
     };

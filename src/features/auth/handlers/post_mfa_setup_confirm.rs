@@ -4,13 +4,16 @@ use axum::http::{HeaderMap, header};
 use axum::response::{AppendHeaders, IntoResponse, Response};
 use serde::Deserialize;
 
-use crate::core::cookie::{build_expired_host_cookie, read_cookie};
+use crate::core::cookie::{build_expired_host_cookie, build_host_cookie, read_cookie};
 use crate::core::error::AppError;
 use crate::core::request_context::RequestContext;
 use crate::core::state::AppState;
 use crate::features::auth::actions::confirm_authenticator_setup::ConfirmAuthenticatorSetup;
 use crate::features::auth::responses::recovery_codes_response::RecoveryCodesResponse;
 use crate::features::auth_challenges::entities::auth_challenge::AUTH_CHALLENGE_COOKIE_NAME;
+use crate::features::known_browsers::entities::known_browser::{
+    KNOWN_BROWSER_COOKIE_NAME, KNOWN_BROWSER_VALID_FOR_SECONDS,
+};
 use crate::features::sessions::entities::presented_session::PresentedSession;
 
 #[derive(Deserialize)]
@@ -33,6 +36,7 @@ pub async fn post_mfa_setup_confirm(
             confirm_request.code.trim(),
             &request_context,
             &presented_session,
+            read_cookie(&request_headers, KNOWN_BROWSER_COOKIE_NAME),
         )
         .await?;
     let [access_cookie, refresh_cookie] = confirmed_setup.session_tokens.to_set_cookie_values();
@@ -43,6 +47,14 @@ pub async fn post_mfa_setup_confirm(
             (
                 header::SET_COOKIE,
                 build_expired_host_cookie(AUTH_CHALLENGE_COOKIE_NAME),
+            ),
+            (
+                header::SET_COOKIE,
+                build_host_cookie(
+                    KNOWN_BROWSER_COOKIE_NAME,
+                    &confirmed_setup.browser_token,
+                    KNOWN_BROWSER_VALID_FOR_SECONDS,
+                ),
             ),
         ]),
         Json(RecoveryCodesResponse::from_codes(

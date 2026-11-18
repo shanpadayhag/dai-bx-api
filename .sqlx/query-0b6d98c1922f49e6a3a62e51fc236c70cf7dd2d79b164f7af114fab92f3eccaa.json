@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sessions.id AS session_id, sessions.user_id, users.security_ref\n               FROM session_tokens\n               JOIN sessions ON sessions.id = session_tokens.session_id\n               JOIN users ON users.id = sessions.user_id\n               WHERE session_tokens.token_hash = $1\n                 AND session_tokens.kind = 'access'\n                 AND session_tokens.expires_at > now()\n                 AND sessions.revoked_at IS NULL\n                 AND sessions.last_seen_at > now() - make_interval(secs => $2::float8)\n                 AND sessions.created_at > now() - make_interval(secs => $3::float8)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "security_ref",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "security_ref"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0b6d98c1922f49e6a3a62e51fc236c70cf7dd2d79b164f7af114fab92f3eccaa"
+}

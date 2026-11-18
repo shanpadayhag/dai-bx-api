@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE pending_sign_in_alerts\n             SET next_attempt_at = now() + make_interval(secs => $2::float8)\n             WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "14876202aeed67782ec020f972bd5ed0446a6820d8d726918f177f706e43d602"
+}

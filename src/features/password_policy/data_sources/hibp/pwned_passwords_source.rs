@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use reqwest::Client;
 
+use crate::features::password_policy::error::PwnedPasswordsError;
+
 pub const HIBP_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub struct HibpPwnedPasswordsSource<'a> {
@@ -17,9 +19,12 @@ impl<'a> HibpPwnedPasswordsSource<'a> {
         }
     }
 
-    pub async fn count_breaches(&self, password_sha1_hex: &str) -> Result<u64, reqwest::Error> {
+    pub async fn count_breaches(
+        &self,
+        password_sha1_hex: &str,
+    ) -> Result<u64, PwnedPasswordsError> {
         let (hash_prefix, hash_suffix) = password_sha1_hex.split_at(HASH_PREFIX_LENGTH);
-        let range_body = self
+        let range_response = self
             .http_client
             .get(format!(
                 "{}/range/{hash_prefix}",
@@ -28,10 +33,12 @@ impl<'a> HibpPwnedPasswordsSource<'a> {
             .header("Add-Padding", "true")
             .timeout(HIBP_REQUEST_TIMEOUT)
             .send()
-            .await?
-            .error_for_status()?
-            .text()
             .await?;
+        let response_status = range_response.status();
+        if !response_status.is_success() {
+            return Err(PwnedPasswordsError::UnexpectedStatus(response_status));
+        }
+        let range_body = range_response.text().await?;
         Ok(find_suffix_count(&range_body, hash_suffix))
     }
 }
@@ -144,6 +151,43 @@ mod tests {
             .count_breaches(PASSWORD_SHA1_HEX)
             .await;
 
-        assert!(lookup_result.is_err_and(|lookup_error| lookup_error.is_timeout()));
+        assert!(lookup_result.is_err_and(|lookup_error| matches!(&lookup_error, PwnedPasswordsError::Request(request_error) if request_error.is_timeout())));
+    }
+
+    #[tokio::test]
+    async fn refuses_a_redirect_without_following_it() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/range/5BAA6"))
+            .respond_with(ResponseTemplate::new(302).insert_header("location", "/somewhere-else"))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/somewhere-else"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(""))
+            .expect(0)
+            .mount(&mock_server)
+            .await;
+        let http_client = build_http_client();
+
+        let lookup_result = HibpPwnedPasswordsSource::new(&http_client, &mock_server.uri())
+            .count_breaches(PASSWORD_SHA1_HEX)
+            .await;
+
+        assert!(lookup_result.is_err(), "a redirect isn't an answer");
+    }
+
+    #[tokio::test]
+    async fn keeps_the_hash_prefix_out_of_its_errors() {
+        let http_client = build_http_client();
+
+        let lookup_error = HibpPwnedPasswordsSource::new(&http_client, "http://127.0.0.1:9")
+            .count_breaches(PASSWORD_SHA1_HEX)
+            .await
+            .expect_err("nothing listens on that port");
+
+        assert!(!lookup_error.to_string().contains("5BAA6"));
+        assert!(!format!("{lookup_error:?}").contains("5BAA6"));
     }
 }

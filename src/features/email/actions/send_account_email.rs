@@ -29,7 +29,7 @@ impl<'a> SendAccountEmail<'a> {
         link_token: &str,
     ) -> Result<(), EmailError> {
         let action_link = format!(
-            "{}{}?token={link_token}",
+            "{}{}#token={link_token}",
             self.app_origin.trim_end_matches('/'),
             email_kind.link_path(),
         );
@@ -70,7 +70,7 @@ mod tests {
             send_and_read(AccountEmailKind::VerifyEmail, APP_ORIGIN).await;
 
         assert_eq!(delivered_subject, "Confirm your email for DaiBX");
-        assert!(delivered_text.contains(&format!("{APP_ORIGIN}/verify-email?token={LINK_TOKEN}")));
+        assert!(delivered_text.contains(&format!("{APP_ORIGIN}/verify-email#token={LINK_TOKEN}")));
     }
 
     #[tokio::test]
@@ -78,7 +78,7 @@ mod tests {
         let (_, delivered_text) = send_and_read(AccountEmailKind::PasswordReset, APP_ORIGIN).await;
 
         assert!(
-            delivered_text.contains(&format!("{APP_ORIGIN}/reset-password?token={LINK_TOKEN}"))
+            delivered_text.contains(&format!("{APP_ORIGIN}/reset-password#token={LINK_TOKEN}"))
         );
     }
 
@@ -87,7 +87,7 @@ mod tests {
         let (_, delivered_text) =
             send_and_read(AccountEmailKind::ConfirmEmailChange, APP_ORIGIN).await;
 
-        assert!(delivered_text.contains(&format!("{APP_ORIGIN}/confirm-email?token={LINK_TOKEN}")));
+        assert!(delivered_text.contains(&format!("{APP_ORIGIN}/confirm-email#token={LINK_TOKEN}")));
     }
 
     #[tokio::test]
@@ -98,7 +98,7 @@ mod tests {
         )
         .await;
 
-        assert!(delivered_text.contains(&format!("{APP_ORIGIN}/verify-email?token=")));
+        assert!(delivered_text.contains(&format!("{APP_ORIGIN}/verify-email#token=")));
     }
 
     #[tokio::test]

@@ -5,6 +5,7 @@ use crate::core::request_context::RequestContext;
 use crate::core::state::AppState;
 use crate::features::account::actions::check_current_password::CheckCurrentPassword;
 use crate::features::account::error::AccountError;
+use crate::features::known_browsers::actions::forget_known_browsers::ForgetKnownBrowsers;
 use crate::features::remembered_devices::actions::forget_remembered_devices::ForgetRememberedDevices;
 use crate::features::security_log::actions::record_security_event::RecordSecurityEvent;
 use crate::features::security_log::entities::security_event::{
@@ -21,6 +22,7 @@ pub struct EndAllSessions<'a> {
     check_current_password: CheckCurrentPassword<'a>,
     revoke_all_sessions: RevokeAllSessions,
     forget_remembered_devices: ForgetRememberedDevices,
+    forget_known_browsers: ForgetKnownBrowsers,
     record_security_event: RecordSecurityEvent,
 }
 
@@ -32,6 +34,7 @@ impl<'a> EndAllSessions<'a> {
             check_current_password: CheckCurrentPassword::new(&app_state.db_pool),
             revoke_all_sessions: RevokeAllSessions::new(),
             forget_remembered_devices: ForgetRememberedDevices::new(),
+            forget_known_browsers: ForgetKnownBrowsers::new(),
             record_security_event: RecordSecurityEvent::new(),
         }
     }
@@ -65,6 +68,9 @@ impl<'a> EndAllSessions<'a> {
             .await?;
         let forgotten_device_count = self
             .forget_remembered_devices
+            .execute(&mut *sign_out_transaction, current_session.user_id)
+            .await?;
+        self.forget_known_browsers
             .execute(&mut *sign_out_transaction, current_session.user_id)
             .await?;
         self.record_security_event

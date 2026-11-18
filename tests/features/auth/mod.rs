@@ -1,3 +1,5 @@
+mod email_limits;
+mod known_browsers;
 mod malformed_email;
 mod mfa_setup;
 mod mfa_verify;
@@ -6,6 +8,8 @@ mod refresh;
 mod resend_verification_email;
 mod session;
 mod sign_in;
+mod sign_in_alert_queue;
+mod sign_in_alert_sending;
 mod sign_out;
 mod sign_up;
 mod verify_email;

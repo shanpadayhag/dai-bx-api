@@ -6,12 +6,14 @@ use crate::features::categories::error::CategoryError;
 use crate::features::email::error::EmailError;
 use crate::features::email_tokens::error::EmailTokenError;
 use crate::features::invites::error::InviteError;
+use crate::features::known_browsers::error::KnownBrowserError;
 use crate::features::password_policy::error::PasswordPolicyError;
 use crate::features::recovery_codes::error::RecoveryCodeError;
 use crate::features::remembered_devices::error::RememberedDeviceError;
 use crate::features::security_log::entities::security_event::ForbiddenDetail;
 use crate::features::security_log::error::SecurityLogError;
 use crate::features::sessions::error::SessionError;
+use crate::features::sign_in_alerts::error::SignInAlertError;
 use crate::features::throttling::error::ThrottleError;
 use crate::features::users::error::UserError;
 
@@ -53,11 +55,13 @@ auth_error_from_internal!(
     EmailError,
     EmailTokenError,
     ForbiddenDetail,
+    KnownBrowserError,
     PasswordHashError,
     RecoveryCodeError,
     RememberedDeviceError,
     SecurityLogError,
     SessionError,
+    SignInAlertError,
     TotpCipherError,
     UserError,
     sqlx::Error,

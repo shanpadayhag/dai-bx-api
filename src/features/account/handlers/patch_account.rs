@@ -10,7 +10,7 @@ use crate::features::account::entities::account_profile::{
 };
 use crate::features::account::responses::account_profile_response::AccountProfileResponse;
 use crate::features::auth::handlers::post_sign_up::validate_name;
-use crate::features::sessions::entities::current_session::CurrentSession;
+use crate::features::throttling::entities::write_session::WriteSession;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,7 +22,7 @@ pub struct PatchAccountRequest {
 
 pub async fn patch_account(
     State(app_state): State<AppState>,
-    current_session: CurrentSession,
+    write_session: WriteSession,
     Json(patch_request): Json<PatchAccountRequest>,
 ) -> Result<Json<AccountProfileResponse>, AppError> {
     let profile_changes = ProfileChanges {
@@ -52,11 +52,7 @@ pub async fn patch_account(
             .transpose()?,
     };
     let account_profile = UpdateAccountProfile::new()
-        .execute(
-            &app_state.db_pool,
-            current_session.user_id,
-            &profile_changes,
-        )
+        .execute(&app_state.db_pool, write_session.user_id, &profile_changes)
         .await?;
     Ok(Json(account_profile.into()))
 }

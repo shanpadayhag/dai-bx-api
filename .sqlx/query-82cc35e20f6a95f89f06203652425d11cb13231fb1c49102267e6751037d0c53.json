@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO pending_sign_in_alerts (id, user_id, signed_in_at, user_agent, sign_in_method)\n             VALUES ($1, $2, now(), $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "82cc35e20f6a95f89f06203652425d11cb13231fb1c49102267e6751037d0c53"
+}

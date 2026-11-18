@@ -12,6 +12,7 @@ use crate::core::state::AppState;
 use crate::features::auth::actions::sign_in::{SignIn, SignInDetails};
 use crate::features::auth::handlers::post_sign_up::validate_email;
 use crate::features::auth::responses::sign_in_outcome_response::sign_in_outcome_response;
+use crate::features::known_browsers::entities::known_browser::KNOWN_BROWSER_COOKIE_NAME;
 use crate::features::remembered_devices::entities::remembered_device::REMEMBERED_DEVICE_COOKIE_NAME;
 use crate::features::sessions::entities::presented_session::PresentedSession;
 
@@ -35,6 +36,7 @@ pub async fn post_sign_in(
                 email,
                 password: Zeroizing::new(sign_in_request.password),
                 device_token: read_cookie(&request_headers, REMEMBERED_DEVICE_COOKIE_NAME),
+                presented_browser_token: read_cookie(&request_headers, KNOWN_BROWSER_COOKIE_NAME),
             },
             &request_context,
             &presented_session,

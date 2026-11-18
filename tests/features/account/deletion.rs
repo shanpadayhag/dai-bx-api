@@ -12,11 +12,12 @@ use crate::support::{
     set_cookie_headers, sign_in, sign_in_to_code_step, sign_up_with_authenticator, verify_code,
 };
 
-const USER_OWNED_TABLES: [&str; 7] = [
+const USER_OWNED_TABLES: [&str; 8] = [
     "users",
     "sessions",
     "session_tokens",
     "remembered_devices",
+    "known_browsers",
     "recovery_codes",
     "email_tokens",
     "auth_challenges",
@@ -102,6 +103,7 @@ async fn deleting_removes_every_owned_row_and_keeps_an_orphaned_security_log(db_
         "__Host-daibx_access",
         "__Host-daibx_refresh",
         "__Host-daibx_device",
+        "__Host-daibx_browser",
     ] {
         assert!(find_set_cookie(&set_cookies, cleared_cookie).contains("Max-Age=0"));
     }

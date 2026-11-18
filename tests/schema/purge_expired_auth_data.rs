@@ -169,3 +169,24 @@ async fn purges_throttles_that_have_been_quiet_for_a_day(db_pool: PgPool) {
         .expect("exactly one throttle should remain");
     assert_eq!(remaining_throttle_key, "recent");
 }
+
+#[sqlx::test]
+async fn purges_expired_known_browsers_but_keeps_live_ones(db_pool: PgPool) {
+    let user_id = seed_user(&db_pool, "browsers@example.com").await;
+    for expires_in in ["-1 minute", "1 year"] {
+        sqlx::query(
+            "INSERT INTO known_browsers (id, user_id, token_hash, expires_at)
+             VALUES (gen_random_uuid(), $1, $2, now() + $3::interval)",
+        )
+        .bind(user_id)
+        .bind(random_hash())
+        .bind(expires_in)
+        .execute(&db_pool)
+        .await
+        .expect("known browser insert should succeed");
+    }
+
+    purge(&db_pool).await;
+
+    assert_eq!(count_rows(&db_pool, "known_browsers").await, 1);
+}

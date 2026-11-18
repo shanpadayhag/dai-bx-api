@@ -1,14 +1,14 @@
 use axum::body::Body;
-use axum::http::{Response, StatusCode};
+use axum::http::{Response, StatusCode, header};
 use daibx_api::features::security_log::entities::security_event::SecurityEventType;
 use serde_json::json;
 use sqlx::PgPool;
 
 use crate::support::{
     STRONG_PASSWORD, SignedInPerson, build_test_app, count_emails_after_a_pause,
-    create_invite_code, get_with_cookies, latest_link_token, next_totp_code, post_json,
-    post_json_with_cookies, recorded_event_types, response_json, sign_in,
-    sign_up_with_authenticator, unique_email,
+    count_sent_account_emails, create_invite_code, get_with_cookies, latest_link_token,
+    next_totp_code, post_json, post_json_with_cookies, recorded_event_types, response_json,
+    sign_in, sign_up_with_authenticator, unique_email,
 };
 
 async fn request_email_change(
@@ -105,6 +105,26 @@ async fn change_email_sends_a_link_to_the_new_address_and_switches_only_once_con
         confirm_email_change(&db_pool, &link_token).await.status(),
         StatusCode::UNPROCESSABLE_ENTITY
     );
+}
+
+#[sqlx::test]
+async fn change_email_returns_429_and_sends_nothing_when_the_daily_cap_is_full(db_pool: PgPool) {
+    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
+    count_sent_account_emails(&db_pool, 99).await;
+    let new_email = unique_email();
+
+    let response = request_email_change(
+        &db_pool,
+        &signed_in_person,
+        STRONG_PASSWORD,
+        &next_totp_code(&signed_in_person.totp_secret),
+        &new_email,
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(response.headers().contains_key(header::RETRY_AFTER));
+    assert_eq!(count_emails_after_a_pause(&new_email).await, 0);
 }
 
 #[sqlx::test]

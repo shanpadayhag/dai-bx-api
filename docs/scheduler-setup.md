@@ -34,7 +34,7 @@ aws iam attach-role-policy \
 
 ## 3. Create the function
 
-It needs `DATABASE_URL` (the same value `daibx-api-<env>` uses, from `.env.<env>`) and `RUST_LOG`. Pass the settings through a file readable only by you, and delete it afterwards, so the connection string stays out of your shell history.
+It needs `DATABASE_URL` (the same value `daibx-api-<env>` uses, from `.env.<env>`) and `RUST_LOG`. Pass the settings through a file readable only by you, and delete it afterwards, so the connection string stays out of your shell history. Sign-in alerts also need the mail settings in step 8.
 
 ```sh
 umask 077
@@ -127,7 +127,7 @@ aws lambda invoke --function-name daibx-scheduler-<env> response.json && cat res
 aws logs tail /aws/lambda/daibx-scheduler-<env> --since 5m
 ```
 
-The answer looks like `{"ranCount":0,"failedCount":0}`, and the log shows a `due schedules ran` line every minute. A run that fails logs `a due schedule failed to run` with the schedule's id.
+The answer looks like `{"ranCount":0,"failedCount":0,"archivedCount":0,"signInAlertsSent":0}`, and the log shows a `due schedules ran` line every minute. A run that fails logs `a due schedule failed to run` with the schedule's id.
 
 To stop the scheduler without deleting anything:
 
@@ -136,3 +136,26 @@ aws scheduler update-schedule --name daibx-scheduler-<env> --state DISABLED \
   --schedule-expression 'rate(1 minute)' --flexible-time-window Mode=OFF \
   --target '{"Arn":"arn:aws:lambda:ap-southeast-1:566252491895:function:daibx-scheduler-<env>","RoleArn":"arn:aws:iam::566252491895:role/daibx-scheduler-<env>-invoke"}'
 ```
+
+## 8. Give it the mail settings
+
+The scheduler sends sign-in alerts, so it needs `SMTP_*`, `MAIL_FROM` and `APP_ORIGIN`. Add them before deploying a version that sends alerts. Without them, card schedules keep running, alerts wait in the queue, and each cold start logs `sign-in alerts are off until the mail settings are set`.
+
+This copies the values from `daibx-api-<env>` and keeps the scheduler's other settings. The files hold secrets, so they are readable only by you and deleted straight after.
+
+```sh
+umask 077
+aws lambda get-function-configuration --function-name daibx-api-<env> \
+  --query 'Environment.Variables' > api-env.json
+aws lambda get-function-configuration --function-name daibx-scheduler-<env> \
+  --query 'Environment.Variables' > scheduler-env.json
+jq -s '{Variables: (.[1] + (.[0] | with_entries(select(.key | test("^(SMTP_.*|MAIL_FROM|APP_ORIGIN)$")))))}' \
+  api-env.json scheduler-env.json > scheduler-env-next.json
+aws lambda update-function-configuration --function-name daibx-scheduler-<env> \
+  --environment file://scheduler-env-next.json --query 'LastUpdateStatus'
+rm api-env.json scheduler-env.json scheduler-env-next.json
+aws lambda wait function-updated-v2 --function-name daibx-scheduler-<env>
+aws lambda get-function-configuration --function-name daibx-scheduler-<env> --query 'Timeout'
+```
+
+The timeout must be at least 60. Alerts run last in each call and start no new send after 20 seconds.

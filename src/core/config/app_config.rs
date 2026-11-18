@@ -1,5 +1,6 @@
 use std::env;
 
+use crate::core::config::origin_secret::{MIN_ORIGIN_SECRET_LENGTH, OriginSecret};
 use crate::core::config::smtp_settings::{SmtpSettings, SmtpSettingsError};
 use crate::core::security::totp_secret_cipher::{TotpKeyring, TotpKeyringError};
 
@@ -16,6 +17,7 @@ pub struct AppConfig {
     pub smtp_settings: SmtpSettings,
     pub open_signups: bool,
     pub terms_version: String,
+    pub origin_secret: OriginSecret,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +32,8 @@ pub enum AppConfigError {
     Missing(&'static str),
     #[error("{0} is not a valid app origin")]
     InvalidOrigin(String),
+    #[error("ORIGIN_SECRET must be at least {MIN_ORIGIN_SECRET_LENGTH} characters")]
+    ShortOriginSecret,
     #[error(transparent)]
     TotpKeyring(#[from] TotpKeyringError),
     #[error(transparent)]
@@ -49,7 +53,7 @@ impl AppConfig {
                 .ok()
                 .filter(|base_url| !base_url.trim().is_empty())
                 .unwrap_or_else(|| String::from(DEFAULT_HIBP_API_BASE_URL)),
-            app_origin: parse_app_origin(&read_required_variable("APP_ORIGIN")?)?,
+            app_origin: read_app_origin()?,
             smtp_settings: SmtpSettings::from_variables(|variable_name| {
                 env::var(variable_name).ok()
             })?,
@@ -59,6 +63,10 @@ impl AppConfig {
                 .ok()
                 .filter(|terms_version| !terms_version.trim().is_empty())
                 .unwrap_or_else(|| String::from(DEFAULT_TERMS_VERSION)),
+            origin_secret: OriginSecret::new(
+                read_required_variable("ORIGIN_SECRET")?.trim().to_owned(),
+            )
+            .ok_or(AppConfigError::ShortOriginSecret)?,
         })
     }
 
@@ -105,6 +113,10 @@ fn is_wildcard_segment(wildcard_segment: &str) -> bool {
         && wildcard_segment
             .bytes()
             .all(|segment_byte| segment_byte.is_ascii_alphanumeric() || segment_byte == b'-')
+}
+
+pub fn read_app_origin() -> Result<String, AppConfigError> {
+    parse_app_origin(&read_required_variable("APP_ORIGIN")?)
 }
 
 fn parse_app_origin(origin_text: &str) -> Result<String, AppConfigError> {

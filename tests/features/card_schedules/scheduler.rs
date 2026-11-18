@@ -15,11 +15,12 @@ use crate::card_schedules::reads::read_board;
 use crate::card_schedules::runs::{list_runs, run_shapes};
 use crate::cards::create::card_titles_by_list;
 use crate::support::{
-    SignedInPerson, build_test_app, delete_with_cookies, sign_up_with_authenticator,
+    SignedInPerson, build_test_app, delete_with_cookies, production_sized_pool,
+    sign_up_with_authenticator,
 };
 
 async fn call_scheduler(db_pool: &PgPool, now_text: &str) -> DueRunTally {
-    RunDueSchedules::new(db_pool)
+    RunDueSchedules::new(&production_sized_pool(db_pool))
         .execute(UtcInstant::parse(now_text).expect("a valid test time"))
         .await
         .expect("the scheduler call should run")

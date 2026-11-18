@@ -12,6 +12,9 @@ use tower_http::timeout::TimeoutLayer;
 
 use crate::core::middlewares::client_ip::attach_client_ip;
 use crate::core::middlewares::csrf_protection::require_same_origin_json;
+use crate::core::middlewares::origin_secret::require_origin_secret;
+use crate::core::middlewares::refusal_log::log_refused_request;
+use crate::core::middlewares::response_headers::add_response_headers;
 use crate::core::state::AppState;
 use crate::features::{
     account, auth, board_lists, board_properties, boards, calendar_events, card_schedules, cards,
@@ -23,11 +26,17 @@ const MAX_REQUEST_BODY_BYTES: usize = 64 * 1024;
 
 pub fn app(app_state: AppState) -> Router {
     let middleware_stack = ServiceBuilder::new()
+        .layer(middleware::from_fn(add_response_headers))
+        .layer(middleware::from_fn(log_refused_request))
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             REQUEST_TIMEOUT,
         ))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_origin_secret,
+        ))
         .layer(middleware::from_fn(attach_client_ip))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),

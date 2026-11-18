@@ -1,13 +1,16 @@
-use std::sync::Arc;
+use std::io::{self, Write};
+use std::sync::{Arc, Mutex, Once};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::Router;
 use axum::body::{Body, to_bytes};
-use axum::http::{Method, Request, Response, StatusCode, header};
+use axum::http::{HeaderValue, Method, Request, Response, StatusCode, header};
 use daibx_api::app;
 use daibx_api::core::config::app_config::{AllowedOrigin, AppConfig};
+use daibx_api::core::config::origin_secret::OriginSecret;
 use daibx_api::core::config::smtp_settings::{SmtpSecurity, SmtpSettings};
 use daibx_api::core::http_client::build_http_client;
+use daibx_api::core::logging::build_json_log_subscriber;
 use daibx_api::core::mail_transport::build_mail_transport;
 use daibx_api::core::security::totp::{totp_code_at_step, totp_step_at};
 use daibx_api::core::security::totp_secret_cipher::TotpKeyring;
@@ -15,6 +18,7 @@ use daibx_api::core::state::AppState;
 use daibx_api::features::invites::actions::create_invite::CreateInvite;
 use daibx_api::features::security_log::actions::list_security_events_for_subject::ListSecurityEventsForSubject;
 use daibx_api::features::security_log::entities::security_event::SecurityEventType;
+use daibx_api::features::throttling::actions::count_account_email::CountAccountEmail;
 use daibx_api::features::users::actions::find_user_by_email::FindUserByEmail;
 use data_encoding::BASE32_NOPAD;
 use serde::Deserialize;
@@ -22,6 +26,9 @@ use serde_json::json;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
+use tracing::subscriber::DefaultGuard;
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt::MakeWriter;
 
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 const PRODUCTION_POOL_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -33,6 +40,8 @@ const MAILPIT_LOOKUP_INTERVAL: Duration = Duration::from_millis(100);
 pub const LISTED_APP_ORIGIN: &str = "http://localhost:3000";
 pub const PREVIEW_APP_ORIGIN: &str = "https://dai-bx-web-abc123-shans-projects-a71057cb.vercel.app";
 pub const TEST_TERMS_VERSION: &str = "test-terms-1";
+pub const ORIGIN_SECRET_HEADER: &str = "x-daibx-origin-secret";
+pub const TEST_ORIGIN_SECRET: &str = "test-origin-secret-of-at-least-32-characters";
 pub const STRONG_PASSWORD: &str = "violet lantern drifts past seven quiet docks";
 const TEST_TOTP_KEYS: &str = "v1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
 
@@ -59,6 +68,8 @@ pub fn test_app_config() -> AppConfig {
         },
         open_signups: false,
         terms_version: String::from(TEST_TERMS_VERSION),
+        origin_secret: OriginSecret::new(String::from(TEST_ORIGIN_SECRET))
+            .expect("the test secret is long enough"),
     }
 }
 
@@ -76,17 +87,111 @@ pub fn build_test_app_with(db_pool: PgPool, app_config: AppConfig) -> Router {
     })
 }
 
-fn production_sized_pool(db_pool: &PgPool) -> PgPool {
+pub fn production_sized_pool(db_pool: &PgPool) -> PgPool {
     if db_pool.is_closed() {
         return db_pool.clone();
     }
     PgPoolOptions::new()
         .max_connections(1)
         .acquire_timeout(PRODUCTION_POOL_ACQUIRE_TIMEOUT)
+        .after_connect(|app_connection, _connection_metadata| {
+            Box::pin(async move {
+                sqlx::query("SET ROLE daibx_app")
+                    .execute(&mut *app_connection)
+                    .await?;
+                Ok(())
+            })
+        })
         .connect_lazy_with((*db_pool.connect_options()).clone())
 }
 
-pub async fn send(test_app: Router, request: Request<Body>) -> Response<Body> {
+pub async fn count_sent_account_emails(db_pool: &PgPool, email_count: i32) {
+    let mut connection = db_pool
+        .acquire()
+        .await
+        .expect("a connection should be free");
+    for _ in 0..email_count {
+        CountAccountEmail::new()
+            .execute(&mut connection)
+            .await
+            .expect("counting an email should succeed");
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct CapturedLogs(Arc<Mutex<Vec<u8>>>);
+
+impl CapturedLogs {
+    pub fn text(&self) -> String {
+        String::from_utf8(self.0.lock().expect("the log buffer").clone())
+            .expect("logs should be UTF-8")
+    }
+
+    pub fn refusal_lines(&self) -> Vec<serde_json::Value> {
+        self.text()
+            .lines()
+            .map(|log_line| serde_json::from_str(log_line).expect("each line should be JSON"))
+            .filter(|log_line: &serde_json::Value| log_line["message"] == "request refused")
+            .collect()
+    }
+}
+
+impl Write for CapturedLogs {
+    fn write(&mut self, log_bytes: &[u8]) -> io::Result<usize> {
+        self.0
+            .lock()
+            .expect("the log buffer")
+            .extend_from_slice(log_bytes);
+        Ok(log_bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'writer> MakeWriter<'writer> for CapturedLogs {
+    type Writer = Self;
+
+    fn make_writer(&'writer self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+// Tracing remembers for each log statement whether anything listens. Tests run side by
+// side, so a listener that is always there stops a test without one from switching a
+// statement off for the test that is capturing it.
+fn keep_log_statements_listened_to() {
+    static BACKGROUND_LISTENER: Once = Once::new();
+    BACKGROUND_LISTENER.call_once(|| {
+        tracing::subscriber::set_global_default(build_json_log_subscriber(
+            EnvFilter::new("info"),
+            io::sink,
+        ))
+        .expect("nothing else sets the global log listener in tests");
+    });
+}
+
+pub fn capture_logs() -> (CapturedLogs, DefaultGuard) {
+    keep_log_statements_listened_to();
+    let captured_logs = CapturedLogs::default();
+    let subscriber_guard = tracing::subscriber::set_default(build_json_log_subscriber(
+        EnvFilter::new("info"),
+        captured_logs.clone(),
+    ));
+    (captured_logs, subscriber_guard)
+}
+
+pub async fn send(test_app: Router, mut request: Request<Body>) -> Response<Body> {
+    request.headers_mut().insert(
+        ORIGIN_SECRET_HEADER,
+        HeaderValue::from_static(TEST_ORIGIN_SECRET),
+    );
+    send_direct(test_app, request).await
+}
+
+pub async fn send_direct(test_app: Router, request: Request<Body>) -> Response<Body> {
+    keep_log_statements_listened_to();
     test_app
         .oneshot(request)
         .await
@@ -255,6 +360,7 @@ pub struct AuthenticatorSetupStart {
 pub struct SignedInPerson {
     pub email: String,
     pub session_cookies: String,
+    pub browser_cookie: String,
     pub totp_secret: Vec<u8>,
     pub recovery_codes: Vec<String>,
 }
@@ -345,9 +451,24 @@ pub async fn sign_up_with_authenticator(db_pool: &PgPool) -> SignedInPerson {
     SignedInPerson {
         email: setup_start.email,
         session_cookies: session_cookie_header(&set_cookies),
+        browser_cookie: cookie_pair(&find_set_cookie(&set_cookies, "__Host-daibx_browser")),
         totp_secret,
         recovery_codes,
     }
+}
+
+pub async fn count_known_browsers(db_pool: &PgPool) -> i64 {
+    sqlx::query_scalar("SELECT count(*) FROM known_browsers")
+        .fetch_one(db_pool)
+        .await
+        .expect("counting known browsers should succeed")
+}
+
+pub async fn count_pending_sign_in_alerts(db_pool: &PgPool) -> i64 {
+    sqlx::query_scalar("SELECT count(*) FROM pending_sign_in_alerts")
+        .fetch_one(db_pool)
+        .await
+        .expect("counting pending alerts should succeed")
 }
 
 pub async fn sign_in(
@@ -421,9 +542,13 @@ struct MailpitMessageSummary {
 }
 
 #[derive(Deserialize)]
-struct MailpitMessage {
+pub struct MailpitMessage {
+    #[serde(rename = "Subject")]
+    pub subject: String,
     #[serde(rename = "Text")]
-    text_body: String,
+    pub text_body: String,
+    #[serde(rename = "HTML")]
+    pub html_body: String,
 }
 
 async fn search_mailpit(recipient: &str) -> Vec<String> {
@@ -459,9 +584,9 @@ pub async fn count_emails_after_a_pause(recipient: &str) -> usize {
     search_mailpit(recipient).await.len()
 }
 
-pub async fn latest_link_token(recipient: &str, expected_email_count: usize) -> String {
+pub async fn read_latest_email(recipient: &str, expected_email_count: usize) -> MailpitMessage {
     let message_ids = wait_for_email_count(recipient, expected_email_count).await;
-    let latest_message: MailpitMessage = build_http_client()
+    build_http_client()
         .get(format!(
             "{MAILPIT_API_URL}/api/v1/message/{}",
             message_ids[0]
@@ -471,13 +596,17 @@ pub async fn latest_link_token(recipient: &str, expected_email_count: usize) -> 
         .expect("Mailpit message should load")
         .json()
         .await
-        .expect("Mailpit message should be JSON");
-    latest_message
+        .expect("Mailpit message should be JSON")
+}
+
+pub async fn latest_link_token(recipient: &str, expected_email_count: usize) -> String {
+    read_latest_email(recipient, expected_email_count)
+        .await
         .text_body
         .split_whitespace()
         .find_map(|text_word| {
             text_word
-                .split_once("?token=")
+                .split_once("#token=")
                 .map(|(_, link_token)| link_token)
         })
         .expect("the email should contain a link with a token")

@@ -21,6 +21,10 @@ impl AcceptedSecondFactor {
         }
     }
 
+    pub fn is_recovery_code(&self) -> bool {
+        matches!(self, AcceptedSecondFactor::RecoveryCode { .. })
+    }
+
     pub fn remaining_recovery_codes(&self) -> Option<i64> {
         match self {
             AcceptedSecondFactor::Authenticator => None,

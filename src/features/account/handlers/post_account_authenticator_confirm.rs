@@ -12,6 +12,7 @@ use crate::features::account::actions::confirm_authenticator_replacement::Confir
 use crate::features::account::error::AccountError;
 use crate::features::account::responses::status_response::StatusResponse;
 use crate::features::auth_challenges::entities::auth_challenge::AUTH_CHALLENGE_COOKIE_NAME;
+use crate::features::known_browsers::entities::known_browser::KNOWN_BROWSER_COOKIE_NAME;
 use crate::features::remembered_devices::entities::remembered_device::REMEMBERED_DEVICE_COOKIE_NAME;
 use crate::features::sessions::entities::current_session::CurrentSession;
 
@@ -39,8 +40,12 @@ pub async fn post_account_authenticator_confirm(
         .await?;
     Ok((
         AppendHeaders(
-            [AUTH_CHALLENGE_COOKIE_NAME, REMEMBERED_DEVICE_COOKIE_NAME]
-                .map(|cookie_name| (header::SET_COOKIE, build_expired_host_cookie(cookie_name))),
+            [
+                AUTH_CHALLENGE_COOKIE_NAME,
+                REMEMBERED_DEVICE_COOKIE_NAME,
+                KNOWN_BROWSER_COOKIE_NAME,
+            ]
+            .map(|cookie_name| (header::SET_COOKIE, build_expired_host_cookie(cookie_name))),
         ),
         Json(StatusResponse::authenticator_replaced()),
     )

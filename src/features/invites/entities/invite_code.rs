@@ -3,7 +3,8 @@ use zeroize::Zeroizing;
 
 use crate::core::security::crockford_code::{generate_crockford_code, normalize_crockford_code};
 
-pub const INVITE_CODE_SYMBOL_COUNT: usize = 16;
+pub const INVITE_CODE_SYMBOL_COUNT: usize = 26;
+const EARLIER_INVITE_CODE_SYMBOL_COUNT: usize = 16;
 pub const INVITE_VALIDITY_SECONDS: i64 = 7 * 24 * 60 * 60;
 
 pub struct CreatedInvite {
@@ -17,6 +18,7 @@ pub fn generate_invite_code() -> Zeroizing<String> {
 
 pub fn normalize_invite_code(entered_code: &str) -> Option<Zeroizing<String>> {
     normalize_crockford_code(entered_code, INVITE_CODE_SYMBOL_COUNT)
+        .or_else(|| normalize_crockford_code(entered_code, EARLIER_INVITE_CODE_SYMBOL_COUNT))
 }
 
 pub fn hash_invite_code(normalized_code: &str) -> [u8; 32] {
@@ -28,11 +30,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn generates_sixteen_symbols_in_groups_of_four() {
+    fn generates_at_least_128_bits_in_groups_of_four() {
         let invite_code = generate_invite_code();
 
-        assert_eq!(invite_code.len(), 19);
-        assert_eq!(invite_code.matches('-').count(), 3);
+        assert_eq!(invite_code.len(), 32);
+        assert_eq!(invite_code.matches('-').count(), 6);
+        const { assert!(INVITE_CODE_SYMBOL_COUNT * 5 >= 128) };
+        assert!(normalize_invite_code(&invite_code).is_some());
+    }
+
+    #[test]
+    fn still_accepts_a_code_issued_at_the_earlier_length() {
+        let normalized_code =
+            normalize_invite_code("K7QM-2XRD-9FTB-0011").expect("the earlier code should work");
+
+        assert_eq!(normalized_code.as_str(), "K7QM2XRD9FTB0011");
+    }
+
+    #[test]
+    fn refuses_any_other_length() {
+        assert!(normalize_invite_code("K7QM-2XRD-9FTB-001").is_none());
+        assert!(normalize_invite_code("K7QM-2XRD-9FTB-0011-2").is_none());
     }
 
     #[test]

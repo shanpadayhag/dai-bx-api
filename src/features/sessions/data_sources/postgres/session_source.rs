@@ -267,9 +267,10 @@ impl PostgresSessionSource {
     ) -> Result<Option<ActiveSession>, sqlx::Error> {
         sqlx::query_as!(
             ActiveSession,
-            r#"SELECT sessions.id AS session_id, sessions.user_id
+            r#"SELECT sessions.id AS session_id, sessions.user_id, users.security_ref
                FROM session_tokens
                JOIN sessions ON sessions.id = session_tokens.session_id
+               JOIN users ON users.id = sessions.user_id
                WHERE session_tokens.token_hash = $1
                  AND session_tokens.kind = 'access'
                  AND session_tokens.expires_at > now()
@@ -355,11 +356,10 @@ mod tests {
             .expect("inserting the token should succeed");
 
         assert_eq!(
-            find_active(&db_pool, "access-token").await,
-            Some(ActiveSession {
-                session_id,
-                user_id
-            })
+            find_active(&db_pool, "access-token")
+                .await
+                .map(|active_session| (active_session.session_id, active_session.user_id)),
+            Some((session_id, user_id))
         );
         assert_eq!(find_active(&db_pool, "unknown-token").await, None);
     }

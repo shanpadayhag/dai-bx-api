@@ -15,7 +15,8 @@ use crate::card_schedules::pause::pause_schedule;
 use crate::card_schedules::reads::calendar_week;
 use crate::card_schedules::update::patch_schedule;
 use crate::support::{
-    SignedInPerson, build_test_app, delete_with_cookies, response_json, sign_up_with_authenticator,
+    SignedInPerson, build_test_app, delete_with_cookies, production_sized_pool, response_json,
+    sign_up_with_authenticator,
 };
 
 fn with_block(schedule_body: serde_json::Value) -> serde_json::Value {
@@ -85,7 +86,7 @@ async fn pauses_and_flags_schedules_into_a_deleted_list_until_another_is_picked(
     let flagged_week = calendar_week(&db_pool, &signed_in_person, "2030-01-07").await;
     assert_eq!(flagged_week["events"], json!([]));
     assert_eq!(flagged_week["moves"], json!([]));
-    let scheduler_tally = RunDueSchedules::new(&db_pool)
+    let scheduler_tally = RunDueSchedules::new(&production_sized_pool(&db_pool))
         .execute(UtcInstant::parse("2030-01-07T10:01:00Z").expect("a valid test time"))
         .await
         .expect("the scheduler call should run");

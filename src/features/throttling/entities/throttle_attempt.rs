@@ -11,6 +11,11 @@ pub const LOOSE_FAILURE_LIMIT: i32 = 100;
 pub const LOOSE_WINDOW_SECONDS: i64 = 60 * 60;
 pub const EMAIL_SEND_LIMIT: i32 = 3;
 pub const EMAIL_SEND_WINDOW_SECONDS: i64 = 60 * 60;
+pub const EMAIL_REQUEST_IP_LIMIT: i32 = 10;
+pub const EMAIL_REQUEST_IP_WINDOW_SECONDS: i64 = 60 * 60;
+pub const EMAIL_CAP_KEY: &str = "email_send:all";
+pub const EMAIL_CAP_LIMIT: i32 = 100;
+pub const EMAIL_CAP_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 pub const WRITE_LIMIT: i32 = 600;
 pub const WRITE_WINDOW_SECONDS: i64 = 10 * 60;
 
@@ -46,6 +51,10 @@ pub fn email_send_key(purpose: EmailSendPurpose, email: &str) -> String {
         purpose.key_prefix(),
         email_account_key(email)
     )
+}
+
+pub fn email_request_ip_key(client_ip: IpAddr) -> String {
+    format!("email_request:ip:{client_ip}")
 }
 
 pub fn write_key(user_id: Uuid) -> String {

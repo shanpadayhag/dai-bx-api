@@ -1,0 +1,97 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pending_sign_in_alerts.id,\n                      users.email::text AS \"recipient!\",\n                      users.security_ref,\n                      users.calendar_time_zone,\n                      pending_sign_in_alerts.user_agent,\n                      pending_sign_in_alerts.sign_in_method,\n                      (extract(epoch FROM pending_sign_in_alerts.signed_in_at) * 1000)::bigint\n                          AS \"signed_in_unix_millis!\",\n                      pending_sign_in_alerts.signed_in_at\n                          < now() - make_interval(secs => $1::float8)\n                          AS \"is_past_retry_window!\"\n               FROM pending_sign_in_alerts\n               JOIN users ON users.id = pending_sign_in_alerts.user_id\n               WHERE pending_sign_in_alerts.next_attempt_at <= now()\n               ORDER BY pending_sign_in_alerts.next_attempt_at, pending_sign_in_alerts.id\n               LIMIT 1\n               FOR UPDATE OF pending_sign_in_alerts SKIP LOCKED",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "pending_sign_in_alerts",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "recipient!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "security_ref",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "security_ref"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "calendar_time_zone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "calendar_time_zone"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "user_agent",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pending_sign_in_alerts",
+            "name": "user_agent"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "sign_in_method",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pending_sign_in_alerts",
+            "name": "sign_in_method"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "signed_in_unix_millis!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_past_retry_window!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      true,
+      true,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "a422fec50179f67660b94f6397727328b194f47f3a6ca933c5e98e95d0f23de3"
+}

@@ -51,7 +51,7 @@
 
 DaiBX puts nested tasks, a Trello-like board and a calendar in one place. Starting a task writes a calendar event and finishing it sets the end, so the calendar records what actually happened.
 
-This repository is the API. It's one Axum application that runs as a single AWS Lambda function, with Postgres on Supabase as its only store. The web app ([dai-bx-web](https://github.com/shanpadayhag/dai-bx-web)) reaches it through a `/backend` rewrite on Vercel, so the browser sees one origin.
+This repository is the API. It's one Axum application that runs as a single AWS Lambda function, with Postgres on Supabase as its only store. The web app ([dai-bx-web](https://github.com/shanpadayhag/dai-bx-web)) reaches it through a `/backend` proxy on Vercel, so the browser sees one origin.
 
 The code is organised by feature (`src/features/<feature>/`), each with its own router, handlers, actions and data sources. What no single feature owns lives in `src/core/`.
 
@@ -135,22 +135,22 @@ curl http://localhost:9000/health
 | Method | Path | Answers |
 | --- | --- | --- |
 | GET | `/health` | `200 {"status":"ok"}` when the database answers, `500 {"error":"internal server error"}` when it doesn't |
-| POST | `/auth/sign-up` | `{"inviteCode","name","email","password"}` → `202 {"status":"verification_email_sent"}`, also for an email that's already taken |
+| POST | `/auth/sign-up` | `{"inviteCode","name","email","password"}` → `202 {"status":"verification_email_sent"}`, also for an email that's already taken; `429` after 3 an hour for one address, 10 an hour from one IP address, or 100 emails in 24 hours overall |
 | POST | `/auth/verify-email` | `{"token"}` from the emailed link → `200 {"next":"set_up_authenticator"}` and a 5-minute challenge cookie |
-| POST | `/auth/verify-email/resend` | `{"email"}` → `202 {"status":"verification_email_sent"}` whether or not the account exists; `429` after 3 an hour |
+| POST | `/auth/verify-email/resend` | `{"email"}` → `202 {"status":"verification_email_sent"}` whether or not the account exists; `429` after 3 an hour for one address, 10 an hour from one IP address, or 100 emails in 24 hours overall |
 | GET | `/auth/mfa/setup` | with the challenge cookie → `200 {"otpauthUri","manualEntryKey"}` for the authenticator app; `401` without a live setup challenge |
 | POST | `/auth/mfa/setup/confirm` | `{"code"}` → `200 {"recoveryCodes":[…10]}` shown once, plus the access and refresh cookies; `422` for a wrong code, `401` after 5 wrong codes or 5 minutes |
 | POST | `/auth/sign-in` | `{"email","password"}` → `200 {"next":"enter_code"}` (or `set_up_authenticator`, `verify_email`, or `signed_in` on a remembered device); `401 {"error":"the email or password is incorrect"}` for any wrong pair; `429` after repeated failures |
 | POST | `/auth/mfa/verify` | `{"code","rememberDevice"}` with the challenge cookie; an authenticator code or a recovery code → `200 {"next":"signed_in"}` and the session cookies, plus `"remainingRecoveryCodes"` after a recovery code |
 | POST | `/auth/refresh` | `{}` with the refresh cookie → `200 {"status":"refreshed"}` and a new cookie pair; `401` when the session is over or the token was reused |
 | POST | `/auth/sign-out` | `{}` with a session → `200 {"status":"signed_out"}`; ends this session and keeps the remembered device |
-| POST | `/auth/password-reset` | `{"email"}` → `202 {"status":"reset_email_sent"}` whether or not the account exists; `429` after 3 an hour |
+| POST | `/auth/password-reset` | `{"email"}` → `202 {"status":"reset_email_sent"}` whether or not the account exists; `429` after 3 an hour for one address, 10 an hour from one IP address, or 100 emails in 24 hours overall |
 | POST | `/auth/password-reset/complete` | `{"token","password"}` → `200 {"next":"enter_code"}` and a challenge cookie; every session and remembered device ends; `422` for a used, expired or refused password |
 | GET | `/auth/session` | with the access cookie → `200 {"user":{"name","email","accentColor","theme"}}`; `401` when signed out, idle 7 days, or 30 days after sign-in |
 | GET | `/account` | with a session → `200 {"name","email","accentColor","theme","security":{"recoveryCodesRemaining","activeSessionCount"}}` |
 | PATCH | `/account` | any of `{"name","accentColor","theme"}` → `200` with the updated profile; `422` for an unknown color or theme |
 | POST | `/account/password` | `{"currentPassword","newPassword"}` → `200 {"status":"password_changed"}`; ends every other session; `422` for a wrong current password |
-| POST | `/account/email` | `{"password","code","newEmail"}` → `202 {"status":"confirmation_email_sent"}` and a link to the new address |
+| POST | `/account/email` | `{"password","code","newEmail"}` → `202 {"status":"confirmation_email_sent"}` and a link to the new address; `429` after 3 an hour for one address or 100 emails in 24 hours overall |
 | GET | `/account/sessions` | with a session → `200 {"sessions":[{"id","createdAt","lastSeenAt","userAgent","isCurrent"}]}`, most recently used first |
 | POST | `/account/sessions/end` | `{"sessionId","password"}` → `200 {"status":"session_ended"}`; ends another of your sessions |
 | POST | `/account/sessions/end-all` | `{"password"}` → `200 {"status":"signed_out"}`; ends every session and forgets every remembered device |
@@ -178,6 +178,8 @@ Sign-up needs an invite code while DaiBX is invite-only. Create one with the `in
    ```
    It prints a code like `K7QM-2XRD-9FTB-0011`, valid for one sign-up within 7 days. Only its SHA-256 is stored, so this is the only time it's shown.
 
+Every request except `GET /health` must carry `x-daibx-origin-secret` with the value of `ORIGIN_SECRET` (at least 32 characters), or the API answers `403`. The web app's proxy adds it, so the API can't be called directly and the client IP it forwards can be trusted. Each environment has its own value, shared with its web deployment.
+
 Every request that changes something (anything but GET, HEAD and OPTIONS) must come from the web app and carry JSON:
 
 - `Sec-Fetch-Site: same-origin`, or, from browsers that don't send it, an `Origin` listed in `APP_ORIGINS`. Otherwise `403`.
@@ -185,7 +187,7 @@ Every request that changes something (anything but GET, HEAD and OPTIONS) must c
 
 `APP_ORIGINS` is a comma-separated list. One entry may contain a single `*`, which matches letters, digits and hyphens only, for example `https://dai-bx-web-*-shans-projects-a71057cb.vercel.app` for Vercel preview deployments.
 
-The API sends no CORS headers: the browser reaches it through the web app's `/backend` rewrite, on the same origin.
+The API sends no CORS headers: the browser reaches it through the web app's `/backend` proxy, on the same origin.
 
 New passwords are checked against Have I Been Pwned's range API (only the first 5 characters of the password's SHA-1 leave the server). `HIBP_API_BASE_URL` overrides the default `https://api.pwnedpasswords.com`, which tests use to point at a local fake. If the service is slow or down, the check is skipped and logged, and the local rules still apply.
 
@@ -197,7 +199,7 @@ New passwords are checked against Have I Been Pwned's range API (only the first 
 ### Releases and housekeeping
 
 - Pushing to a `release/*` branch deploys the dev Lambda once CI passes. Pushing a `v1.*` tag deploys prod, once CI passes on the tagged commit. Each environment has its own Supabase project, Lambda, deploy role and secrets.
-- Card schedules and idle-card archiving run in a second Lambda, `daibx-scheduler`, which EventBridge Scheduler calls every minute; each call runs the due schedules, then archives the cards left idle past their column's length. The deploys upload it next to the API. [`docs/scheduler-setup.md`](docs/scheduler-setup.md) has the one-time setup per environment. Locally, run it with `cargo lambda watch --bin daibx-scheduler --env-file .env` and call it with `cargo lambda invoke daibx-scheduler --data-ascii '{}'`.
+- Card schedules and idle-card archiving run in a second Lambda, `daibx-scheduler`, which EventBridge Scheduler calls every minute; each call runs the due schedules, archives the cards left idle past their column's length, then sends any queued sign-in alerts. The deploys upload it next to the API. [`docs/scheduler-setup.md`](docs/scheduler-setup.md) has the one-time setup per environment. Locally, run it with `cargo lambda watch --bin daibx-scheduler --env-file .env` and call it with `cargo lambda invoke daibx-scheduler --data-ascii '{}'`.
 - Expired sessions, tokens, challenges and old security events are deleted daily by `purge_expired_auth_data()`. Schedule it once per Supabase project by running `ops/schedule-purge.sql` as the database owner (in the SQL editor, or with `psql`). Re-running it replaces the schedule. `ops/check-purge.sql` shows the job and its last runs.
 - To end someone's sessions as the operator, run `psql "$DATABASE_URL" -v account_email='person@example.com' -f ops/end-account-sessions.sql`. `ops/end-all-sessions.sql` ends everyone's.
 

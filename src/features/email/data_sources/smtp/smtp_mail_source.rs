@@ -38,9 +38,13 @@ impl<'a> SmtpMailSource<'a> {
 
 #[cfg(test)]
 mod tests {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpListener;
+
     use super::*;
     use crate::core::config::smtp_settings::SmtpSettings;
     use crate::core::mail_transport::build_mail_transport;
+    use crate::features::email::error::SmtpFailureKind;
     use crate::features::email::mailpit_test_support::{
         mailpit_smtp_settings, read_message_sent_to, unique_test_recipient,
     };
@@ -119,5 +123,56 @@ mod tests {
             .await;
 
         assert!(matches!(send_result, Err(EmailError::Send(_))));
+    }
+
+    async fn serve_a_rejecting_smtp_server(rejection_line: &'static str) -> u16 {
+        let smtp_listener = TcpListener::bind("127.0.0.1:0").await.expect("a free port");
+        let smtp_port = smtp_listener.local_addr().expect("the port").port();
+        tokio::spawn(async move {
+            let (smtp_stream, _) = smtp_listener.accept().await.expect("a connection");
+            let (read_half, mut write_half) = smtp_stream.into_split();
+            let mut client_lines = BufReader::new(read_half).lines();
+            write_half
+                .write_all(b"220 test ready\r\n")
+                .await
+                .expect("the greeting");
+            while let Ok(Some(client_line)) = client_lines.next_line().await {
+                let server_reply = if client_line.starts_with("RCPT") {
+                    rejection_line
+                } else if client_line.starts_with("QUIT") {
+                    "221 bye\r\n"
+                } else {
+                    "250 ok\r\n"
+                };
+                write_half
+                    .write_all(server_reply.as_bytes())
+                    .await
+                    .expect("the reply");
+            }
+        });
+        smtp_port
+    }
+
+    #[tokio::test]
+    async fn keeps_the_mail_servers_words_out_of_its_error() {
+        let smtp_port =
+            serve_a_rejecting_smtp_server("550 no mailbox for private.person@daibx.test\r\n").await;
+        let rejecting_settings = SmtpSettings {
+            port: smtp_port,
+            ..mailpit_smtp_settings()
+        };
+        let mail_transport = build_mail_transport(&rejecting_settings);
+
+        let send_error = SmtpMailSource::new(&mail_transport, &rejecting_settings.mail_from)
+            .send(&outgoing_email_to("private.person@daibx.test"))
+            .await
+            .expect_err("the server refuses the recipient");
+
+        assert!(matches!(
+            send_error,
+            EmailError::Send(SmtpFailureKind::Permanent)
+        ));
+        assert!(!send_error.to_string().contains("private.person"));
+        assert!(!format!("{send_error:?}").contains("private.person"));
     }
 }

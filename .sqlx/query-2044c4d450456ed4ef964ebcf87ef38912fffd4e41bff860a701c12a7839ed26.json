@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE known_browsers\n             SET last_seen_at = now(), expires_at = now() + make_interval(secs => $3::float8)\n             WHERE user_id = $1 AND token_hash = $2 AND expires_at > now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2044c4d450456ed4ef964ebcf87ef38912fffd4e41bff860a701c12a7839ed26"
+}
