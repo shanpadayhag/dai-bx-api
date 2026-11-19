@@ -8,7 +8,7 @@ Do this once. It sets up what `.github/workflows/backup.yml` needs: a read-only 
 SHOW server_version;
 ```
 
-The major version must match `POSTGRES_IMAGE` in the workflow. `pg_dump` refuses to read a newer server, so change the image if production is newer than 16.
+The major version must match `POSTGRES_IMAGE` in the workflow. `pg_dump` refuses to read a newer server, so change the image when production moves to a newer major version. Production ran 17.11 on 2026-11-19.
 
 ## 2. Create the database role
 

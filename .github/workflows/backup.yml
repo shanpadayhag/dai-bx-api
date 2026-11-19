@@ -16,7 +16,7 @@ env:
   AWS_REGION: ap-northeast-1
   BACKUP_BUCKET: daibx-backups-566252491895
   BACKUP_ROLE_ARN: arn:aws:iam::566252491895:role/daibx-backup-writer
-  POSTGRES_IMAGE: postgres:16@sha256:dd2bf3ce2dc83a81674cf7f217fcfd8a5009a4b325dda5b843bfee82a06cff6f
+  POSTGRES_IMAGE: postgres:17@sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c
 
 jobs:
   backup:
