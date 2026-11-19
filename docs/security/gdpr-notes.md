@@ -1,6 +1,6 @@
 # GDPR notes
 
-What personal data DaiBX holds, why, where, for how long, and how it's deleted. This covers everything stored through milestone 5d (api v1.6.0): accounts and sign-in, tasks, the board, the calendar, time tracking, schedules, sign-in alerts and backups. The final terms and privacy policy are written in milestone 12. What to do if data is lost or exposed is in `breach-procedure.md`.
+What personal data DaiBX holds, why, where, for how long, and how it's deleted. This covers everything stored through milestone 5d (api v1.6.0): accounts and sign-in, tasks, the board, the calendar, time tracking, schedules, sign-in alerts. DaiBX keeps no backups of its own. The final terms and privacy policy are written in milestone 12. What to do if data is lost or exposed is in `breach-procedure.md`.
 
 ## Who holds the data
 
@@ -10,8 +10,6 @@ DaiBX is run by its owner, Shan Padayhag, as an invite-only personal service. Th
 | --- | --- | --- |
 | Supabase (Postgres) | stores everything listed below | Singapore (ap-southeast-1) |
 | AWS Lambda | runs the API and the minute scheduler; keeps their logs in CloudWatch | Singapore (ap-southeast-1) |
-| AWS S3 | keeps the nightly encrypted database backups | Tokyo (ap-northeast-1), so a regional outage can't take the database and its backups together |
-| GitHub Actions | runs the nightly backup job, which reads the database and uploads the encrypted file | GitHub's runners; the job keeps no copy |
 | Vercel | serves the web app and forwards `/backend` requests to the API | its global edge network; requests pass through and Vercel keeps its own short-lived request logs |
 | Google (Gmail SMTP) | sends every DaiBX email: verification, reset and email-change links, and sign-in alerts | Google's infrastructure; it stays the sender while DaiBX has no domain of its own |
 | Have I Been Pwned | checks new passwords against known breaches | receives only the first 5 characters of the password's SHA-1, padded, never the password or any account detail |
@@ -42,7 +40,7 @@ Data minimisation: each item exists because a feature needs it, and nothing is c
 | Invites: a hash of the code, and which account used it | invite-only sign-up | legitimate interest |
 | Security log: event type, time, IP address, user agent, a few non-personal details | detecting and investigating account attacks | legitimate interest in security |
 
-Tasks, notes, calendar events and time entries are free text, and people write health, money and family details into them. DaiBX treats that content as possibly sensitive personal information: it is never logged, never sent to any service except the database and its encrypted backups, and only its owner's signed-in sessions can read it. The app connects to the database as `daibx_app`, a role limited to the app's own tables.
+Tasks, notes, calendar events and time entries are free text, and people write health, money and family details into them. DaiBX treats that content as possibly sensitive personal information: it is never logged, never sent to any service except the database, and only its owner's signed-in sessions can read it. The app connects to the database as `daibx_app`, a role limited to the app's own tables.
 
 ## Cookies
 
@@ -72,7 +70,6 @@ The security log never holds passwords, tokens, codes, secrets or email addresse
 | Pending sign-in alerts | sent, then deleted; one that still can't be sent after an hour is deleted and recorded in the security log as failed |
 | Security log | 12 months, then deleted by the daily purge |
 | Lambda and scheduler logs in CloudWatch | 90 days in production, 30 in development |
-| Encrypted database backups in S3 | 30 days, then deleted by the bucket's lifecycle rule |
 
 The purge is `purge_expired_auth_data()`, which runs daily at 03:17 UTC through Supabase's `pg_cron` in each environment (`ops/schedule-purge.sql`).
 
@@ -83,7 +80,7 @@ Deleting an account (Settings, then the password, a code and the words "delete m
 - an invite the person used stays, but no longer points to them;
 - the security log keeps its rows, and an `account_deleted` row is added. With the account gone, its `security_ref` matches nothing, so the rows can't be tied back to the person. They're deleted after 12 months like any other.
 
-There's no grace period and no undo. The nightly backups still hold the account until they expire after 30 days, and CloudWatch logs age out on their own schedule. A backup restored within those 30 days would bring a deleted account back, so `ops/restore-backup.md` re-applies every deletion recorded since the backup (`ops/reapply-deletions.sql`) before the copy is used.
+There's no grace period and no undo. DaiBX keeps no backups, so nothing brings a deleted account back, and CloudWatch logs age out on their own schedule.
 
 ## Not yet offered
 

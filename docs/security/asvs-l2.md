@@ -128,9 +128,8 @@ The only upload is the task-group import, `POST /task-groups/import`. It is JSON
 | Request origin | 64 random hex characters, compared in constant time | `ORIGIN_SECRET` | Vercel Production and the API Lambda | at once if Vercel or the Lambda may be exposed (see `breach-procedure.md`) |
 | Database connection | TLS, `verify-full` against the Supabase root CA | the `daibx_app` password | Lambda environment | at once if it may have leaked |
 | Email | TLS to Gmail SMTP | the Gmail app password | Lambda environment | at once if it may have leaked |
-| Backups | age (X25519 and ChaCha20-Poly1305) | the backup key pair; public half in GitHub, private half only in the password manager | GitHub variable, password manager | a new pair if the private key may have leaked |
 
-Rules: keys come only from a cryptographic random source, never from code or the repository; each key has one purpose; a secret is never logged or printed; the owner is the only person with access, and every key is in the password manager so a restore can use it. D4 covers the two SHA-1 uses.
+Rules: keys come only from a cryptographic random source, never from code or the repository; each key has one purpose; a secret is never logged or printed; the owner is the only person with access, and every key is in the password manager. D4 covers the two SHA-1 uses.
 
 ### Services DaiBX talks to (13.1.1, 13.2.4, 13.2.5)
 
@@ -142,7 +141,7 @@ Rules: keys come only from a cryptographic random source, never from code or the
 | API and scheduler Lambdas | `smtp.gmail.com` | sending email | TLS, app password |
 | API Lambda | `api.pwnedpasswords.com` | the breached-password check | HTTPS, 2-second connect timeout, no redirects |
 | EventBridge | the scheduler Lambda | the minute run | AWS-internal invoke |
-| GitHub Actions | Supabase, S3 in `ap-northeast-1`, AWS Lambda | migrations, nightly backup, deploys | TLS; short-lived AWS role for backups |
+| GitHub Actions | Supabase, AWS Lambda | migrations, deploys | TLS; short-lived AWS role for deploys |
 
 That table is the allowlist. The API and scheduler connect only to the database, SMTP and breached-password hosts, each fixed by configuration (`DATABASE_URL`, `SMTP_HOST`, `HIBP_API_BASE_URL`). No request can name a host, URL or file for the server to fetch, and the HTTP client follows no redirects, so a request can't send the server anywhere else.
 
@@ -151,11 +150,11 @@ That table is the allowlist. The API and scheduler connect only to the database,
 | Level | What | Required protection |
 | --- | --- | --- |
 | Secret | passwords, codes, tokens, authenticator secrets, keys, connection strings | never stored in plain form (hashed or encrypted as in the crypto table), never logged, never returned after creation, never in a URL query |
-| Sensitive | tasks, notes, cards, calendar events, time tracking, schedules | only the owner's sessions can read it; never logged; `Cache-Control: no-store` on every API response; encrypted in backups; deleted with the account |
+| Sensitive | tasks, notes, cards, calendar events, time tracking, schedules | only the owner's sessions can read it; never logged; `Cache-Control: no-store` on every API response; deleted with the account |
 | Personal | name, email, IP addresses, user agents, sign-in times | kept only as long as the GDPR notes say; IP addresses and user agents only in sessions and the security log; email never in the security log |
 | Public | the changelog, landing page and app code | none beyond integrity |
 
-Every level travels only over TLS. Logs follow the log inventory below, and retention follows `gdpr-notes.md` (CloudWatch 90 days in production, 30 in development; backups 30 days).
+Every level travels only over TLS. Logs follow the log inventory below, and retention follows `gdpr-notes.md` (CloudWatch 90 days in production, 30 in development).
 
 ### Dependencies (15.1.1, 15.1.2)
 
@@ -183,7 +182,7 @@ Every level travels only over TLS. Logs follow the log inventory below, and rete
 | Scheduler logs | `daibx-scheduler-*` | each run's counts, alert send failures, the email cap being reached | 90 days prod, 30 dev | CloudWatch Logs, `ap-southeast-1` |
 | Security log | the API, table `security_events` | account security events with time, IP, user agent and a pseudonymous `security_ref` | 12 months | Supabase |
 | Vercel request logs | Vercel | request lines for pages and `/backend` | Vercel's own retention | Vercel |
-| CI and backup logs | GitHub Actions | build, test, deploy and backup steps; secrets masked | GitHub's retention | GitHub |
+| CI logs | GitHub Actions | build, test and deploy steps; secrets masked | GitHub's retention | GitHub |
 
 Logs go nowhere else: no third-party log service, no email of log content. The API's log calls are the only writers, and their fields are fixed in code.
 
@@ -447,7 +446,7 @@ Logs go nowhere else: no third-party log service, no email of log content. The A
 | # | Level | Requirement (paraphrased) | Status | Where, or why |
 | --- | --- | --- | --- | --- |
 | 13.1.1 | 2 | All communication needs are documented | Met | "Services DaiBX talks to" above |
-| 13.2.1 | 2 | Backend connections use individual service accounts | Met, documented deviation | separate database roles: `daibx_app` for the app (F7), `daibx_backup` for backups, `invite_operator` for invites, the owner role only for migrations; secrets stay in encrypted environment settings (D2) |
+| 13.2.1 | 2 | Backend connections use individual service accounts | Met, documented deviation | separate database roles: `daibx_app` for the app (F7), `invite_operator` for invites, the owner role only for migrations; secrets stay in encrypted environment settings (D2) |
 | 13.2.2 | 2 | Backend connections use least privilege | Met | the app connects as `daibx_app`, with table reads and writes only (F7); `tests/schema/app_database_role.rs`, `tests/features/core/app_database_role.rs` |
 | 13.2.3 | 2 | Service credentials aren't defaults | Met | Supabase and Gmail issue no default passwords |
 | 13.2.4 | 2 | Outbound destinations are allowlisted | Met | "Services DaiBX talks to" above |

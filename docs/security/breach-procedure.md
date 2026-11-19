@@ -24,7 +24,6 @@ Stop the loss first. Each step is safe to take even if the breach later turns ou
 | The database password | Replace the `daibx_app` password in Supabase, then update `DATABASE_URL` on `daibx-api-prod` and `daibx-scheduler-prod`. Replace the `postgres` password too if it may have leaked, and update the GitHub `DATABASE_URL` secret used by migrations. |
 | The database and `TOTP_KEYS` together | Authenticator secrets can be decrypted. Add a new key to `TOTP_KEYS`, make it `TOTP_KEY_CURRENT`, and ask every person to replace their authenticator, because existing secrets stay readable with the old key. |
 | The mail account | Revoke the Gmail app password, create a new one, and set it on both prod Lambdas. Check the account's sent mail for messages DaiBX didn't send. |
-| A backup | Backups are encrypted with the age key. If only the file leaked, the data is safe while the private key is safe. If the key may have leaked, create a new key pair, set `BACKUP_AGE_PUBLIC_KEY`, and delete the old backups once a new one exists. |
 | AWS, GitHub or Supabase account | Change its password, remove unknown keys, sessions and members, and check that MFA is still on. Then do the rows above for every secret that account could read. |
 
 Run each `psql` command against production with the connection string from the password manager. Never paste a secret into a chat, an issue or a commit.

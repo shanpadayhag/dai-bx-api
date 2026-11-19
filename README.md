@@ -229,7 +229,7 @@ cargo sqlx prepare -- --all-targets
 - [x] Card schedules, repeating planned events and calendar time zones
 - [x] Card triggers, move history, idle cards and the card archive
 - [x] Group schedules and repeat follow-ups
-- [x] Security catch-up: sign-in alerts, email limits, nightly backups and an ASVS Level 2 check of everything live
+- [x] Security catch-up: sign-in alerts, email limits and an ASVS Level 2 check of everything live
 - [ ] Automatic scheduling
 
 See the [open issues](https://github.com/shanpadayhag/dai-bx-api/issues) for a full list of proposed features and known issues.
