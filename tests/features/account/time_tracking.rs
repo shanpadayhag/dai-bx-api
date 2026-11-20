@@ -50,6 +50,7 @@ async fn a_new_account_has_the_default_settings(db_pool: PgPool) {
             "workingHoursEnd": "02:00",
             "trackedCategoryId": null,
             "calendarTimeZone": null,
+            "planningHours": null,
         })
     );
 }
@@ -88,6 +89,7 @@ async fn each_field_updates_on_its_own(db_pool: PgPool) {
             "workingHoursEnd": "23:59",
             "trackedCategoryId": studies_category_id,
             "calendarTimeZone": "Europe/London",
+            "planningHours": null,
         })
     );
 
@@ -198,4 +200,91 @@ async fn refuses_the_settings_without_a_session(db_pool: PgPool) {
     let response = get(build_test_app(db_pool), "/account/time-tracking").await;
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+fn custom_planning_week() -> serde_json::Value {
+    json!([
+        { "start": "08:00", "end": "12:00" },
+        { "start": "08:00", "end": "12:00" },
+        null,
+        { "start": "08:00", "end": "12:00" },
+        { "start": "08:00", "end": "12:00" },
+        { "start": "22:00", "end": "02:00" },
+        null,
+    ])
+}
+
+#[sqlx::test]
+async fn saves_a_planning_week_and_sets_it_back_to_working_hours(db_pool: PgPool) {
+    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
+
+    let saved_response = patch_time_tracking(
+        &db_pool,
+        &signed_in_person,
+        json!({ "planningHours": custom_planning_week() }),
+    )
+    .await;
+    assert_eq!(saved_response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(saved_response).await["planningHours"],
+        custom_planning_week()
+    );
+    let kept_settings = response_json(
+        patch_time_tracking(
+            &db_pool,
+            &signed_in_person,
+            json!({ "checkInsEnabled": false }),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(kept_settings["planningHours"], custom_planning_week());
+
+    let cleared_response = patch_time_tracking(
+        &db_pool,
+        &signed_in_person,
+        json!({ "planningHours": null }),
+    )
+    .await;
+
+    assert_eq!(cleared_response.status(), StatusCode::OK);
+    assert_eq!(
+        read_time_tracking(&db_pool, &signed_in_person).await["planningHours"],
+        serde_json::Value::Null
+    );
+}
+
+#[sqlx::test]
+async fn refuses_a_planning_week_that_is_not_seven_good_days(db_pool: PgPool) {
+    let signed_in_person = sign_up_with_authenticator(&db_pool).await;
+    let one_day = json!({ "start": "08:00", "end": "12:00" });
+
+    for (rejected_week, expected_error) in [
+        (
+            serde_json::Value::Array(vec![one_day.clone(); 6]),
+            "planning hours list seven days, Monday first",
+        ),
+        (
+            serde_json::Value::Array(vec![one_day.clone(); 8]),
+            "planning hours list seven days, Monday first",
+        ),
+        (
+            json!([{ "start": "8am", "end": "12:00" }, null, null, null, null, null, null]),
+            "a time is written as HH:MM",
+        ),
+        (
+            json!([{ "start": "08:00", "end": "08:00" }, null, null, null, null, null, null]),
+            "a window starts and ends at different times",
+        ),
+    ] {
+        let response = patch_time_tracking(
+            &db_pool,
+            &signed_in_person,
+            json!({ "planningHours": rejected_week }),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(response_json(response).await["error"], expected_error);
+    }
 }

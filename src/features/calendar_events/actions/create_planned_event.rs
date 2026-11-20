@@ -1,16 +1,19 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::features::calendar_events::actions::check_linkable_task::CheckLinkableTask;
 use crate::features::calendar_events::data_sources::postgres::calendar_event_source::PostgresCalendarEventSource;
 use crate::features::calendar_events::data_sources::postgres::event_series_source::PostgresEventSeriesSource;
 use crate::features::calendar_events::entities::calendar_event::{
     CalendarEvent, CalendarEventKind, EventRepeat, EventWrite, NewCalendarEvent, PlannedEventInput,
+    UNLINKABLE_EVENT_MESSAGE,
 };
 use crate::features::calendar_events::entities::event_series::NewEventSeries;
 use crate::features::calendar_events::error::CalendarEventError;
 
 pub struct CreatePlannedEvent<'a> {
     db_pool: &'a PgPool,
+    check_linkable_task: CheckLinkableTask,
     postgres_calendar_event_source: PostgresCalendarEventSource,
     postgres_event_series_source: PostgresEventSeriesSource,
 }
@@ -19,6 +22,7 @@ impl<'a> CreatePlannedEvent<'a> {
     pub fn new(db_pool: &'a PgPool) -> Self {
         Self {
             db_pool,
+            check_linkable_task: CheckLinkableTask::new(),
             postgres_calendar_event_source: PostgresCalendarEventSource,
             postgres_event_series_source: PostgresEventSeriesSource,
         }
@@ -30,6 +34,9 @@ impl<'a> CreatePlannedEvent<'a> {
         planned_event_input: &PlannedEventInput,
     ) -> Result<CalendarEvent, CalendarEventError> {
         match &planned_event_input.repeat {
+            Some(_) if planned_event_input.task_id.is_some() => Err(CalendarEventError::Invalid(
+                String::from(UNLINKABLE_EVENT_MESSAGE),
+            )),
             Some(event_repeat) => {
                 self.create_series(user_id, planned_event_input, event_repeat)
                     .await
@@ -78,7 +85,7 @@ impl<'a> CreatePlannedEvent<'a> {
             kind: CalendarEventKind::Planned,
             title: planned_event_input.title.clone(),
             category_id: planned_event_input.category_id,
-            task_id: None,
+            task_id: planned_event_input.task_id,
             card_id: None,
             starts_at: planned_event_input.starts_at,
             ends_at: Some(planned_event_input.ends_at),
@@ -89,6 +96,11 @@ impl<'a> CreatePlannedEvent<'a> {
             original_start: None,
         };
         let mut create_transaction = self.db_pool.begin().await?;
+        if let Some(task_id) = planned_event_input.task_id {
+            self.check_linkable_task
+                .execute(&mut *create_transaction, user_id, task_id)
+                .await?;
+        }
         let event_write = self
             .postgres_calendar_event_source
             .insert(&mut *create_transaction, &new_event)
@@ -123,6 +135,7 @@ mod tests {
             ends_at: instant("2026-11-05T10:00:00Z"),
             time_zone: None,
             repeat: None,
+            task_id: None,
         }
     }
 

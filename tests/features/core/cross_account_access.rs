@@ -140,6 +140,8 @@ fn app_routes() -> Vec<AppRoute> {
         any_session(Method::POST, "/calendar/events"),
         any_session(Method::GET, "/categories"),
         any_session(Method::POST, "/categories"),
+        any_session(Method::POST, "/plans/proposal"),
+        any_session(Method::POST, "/plans/accept"),
         any_session(Method::GET, "/task-groups"),
         any_session(Method::POST, "/task-groups"),
         any_session(Method::POST, "/task-groups/import"),

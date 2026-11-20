@@ -1,7 +1,8 @@
 use serde::Serialize;
 
+use crate::core::wall_clock::{WallClockWindow, format_wall_clock_time};
 use crate::features::tasks::entities::task::{
-    AffectedGroup, GroupTasks, MovedTask, Task, TaskCard,
+    AffectedGroup, GroupTasks, MovedTask, Task, TaskCard, TaskDue,
 };
 
 #[derive(Debug, Serialize)]
@@ -21,6 +22,39 @@ pub struct TaskResponse {
     pub estimate_minutes: Option<i32>,
     pub card: Option<TaskCardResponse>,
     pub tracked_event_count: i64,
+    pub priority: &'static str,
+    pub due: Option<TaskDueResponse>,
+    pub plan_between: Option<PlanBetweenResponse>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TaskDueResponse {
+    pub date: String,
+    pub time: Option<String>,
+}
+
+impl From<TaskDue> for TaskDueResponse {
+    fn from(task_due: TaskDue) -> Self {
+        Self {
+            date: task_due.date.to_string(),
+            time: task_due.time.map(format_wall_clock_time),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlanBetweenResponse {
+    pub start: String,
+    pub end: String,
+}
+
+impl From<WallClockWindow> for PlanBetweenResponse {
+    fn from(plan_window: WallClockWindow) -> Self {
+        Self {
+            start: format_wall_clock_time(plan_window.start),
+            end: format_wall_clock_time(plan_window.end),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -61,6 +95,9 @@ impl From<Task> for TaskResponse {
             estimate_minutes: task.estimate_minutes,
             card: task.card.map(TaskCardResponse::from),
             tracked_event_count: task.tracked_event_count,
+            priority: task.planning.priority.as_str(),
+            due: task.planning.due.map(TaskDueResponse::from),
+            plan_between: task.planning.plan_window.map(PlanBetweenResponse::from),
         }
     }
 }

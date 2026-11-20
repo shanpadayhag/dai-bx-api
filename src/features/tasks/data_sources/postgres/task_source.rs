@@ -1,10 +1,62 @@
+use jiff::civil::{Date, Time};
 use sqlx::PgExecutor;
 use uuid::Uuid;
 
+use crate::core::wall_clock::{WallClockWindow, format_wall_clock_time};
 use crate::features::task_groups::entities::uncheck_cutoffs::UncheckCutoffs;
 use crate::features::tasks::entities::task::{
-    CompletedLinkedTask, NewTask, Task, TaskCard, TaskChanges, TrackableTask,
+    CompletedLinkedTask, NewTask, Task, TaskCard, TaskChanges, TaskDue, TaskPlanning, TaskPriority,
+    TrackableTask,
 };
+
+pub struct TaskPlanningColumns {
+    pub priority: String,
+    pub due_date_text: Option<String>,
+    pub due_time_text: Option<String>,
+    pub plan_window_start_text: Option<String>,
+    pub plan_window_end_text: Option<String>,
+}
+
+fn decode_text<T: std::str::FromStr>(stored_text: Option<&str>) -> Result<Option<T>, sqlx::Error>
+where
+    T::Err: std::error::Error + Send + Sync + 'static,
+{
+    stored_text
+        .map(|stored_text| {
+            stored_text
+                .parse::<T>()
+                .map_err(|parse_error| sqlx::Error::Decode(Box::new(parse_error)))
+        })
+        .transpose()
+}
+
+impl TaskPlanningColumns {
+    pub fn into_task_planning(self) -> Result<TaskPlanning, sqlx::Error> {
+        let priority = TaskPriority::parse(&self.priority).ok_or_else(|| {
+            sqlx::Error::Decode(format!("unknown task priority {}", self.priority).into())
+        })?;
+        let due = decode_text::<Date>(self.due_date_text.as_deref())?
+            .map(|date| -> Result<TaskDue, sqlx::Error> {
+                Ok(TaskDue {
+                    date,
+                    time: decode_text::<Time>(self.due_time_text.as_deref())?,
+                })
+            })
+            .transpose()?;
+        let plan_window = match (
+            decode_text::<Time>(self.plan_window_start_text.as_deref())?,
+            decode_text::<Time>(self.plan_window_end_text.as_deref())?,
+        ) {
+            (Some(start), Some(end)) => WallClockWindow::new(start, end),
+            _ => None,
+        };
+        Ok(TaskPlanning {
+            priority,
+            due,
+            plan_window,
+        })
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TaskPlace {
@@ -35,6 +87,11 @@ impl PostgresTaskSource {
                       tasks.name,
                       (tasks.completed_at >= coalesce(to_timestamp($2::bigint / 1000.0), '-infinity')) IS TRUE AS "is_done!",
                       tasks.estimate_minutes,
+                      tasks.priority,
+                      to_char(tasks.due_date, 'YYYY-MM-DD') AS due_date_text,
+                      to_char(tasks.due_time, 'HH24:MI') AS due_time_text,
+                      to_char(tasks.plan_window_start, 'HH24:MI') AS plan_window_start_text,
+                      to_char(tasks.plan_window_end, 'HH24:MI') AS plan_window_end_text,
                       cards.id AS "card_id?",
                       cards.title AS "card_title?",
                       cards.board_id AS "card_board_id?",
@@ -50,30 +107,40 @@ impl PostgresTaskSource {
         )
         .fetch_all(executor)
         .await?;
-        Ok(task_rows
+        task_rows
             .into_iter()
-            .map(|task_row| Task {
-                id: task_row.id,
-                parent_id: task_row.parent_id,
-                position: task_row.position,
-                name: task_row.name,
-                is_done: task_row.is_done,
-                estimate_minutes: task_row.estimate_minutes,
-                card: match (
-                    task_row.card_id,
-                    task_row.card_title,
-                    task_row.card_board_id,
-                ) {
-                    (Some(card_id), Some(card_title), Some(card_board_id)) => Some(TaskCard {
-                        id: card_id,
-                        title: card_title,
-                        board_id: card_board_id,
-                    }),
-                    _ => None,
-                },
-                tracked_event_count: task_row.tracked_event_count,
+            .map(|task_row| {
+                Ok(Task {
+                    id: task_row.id,
+                    parent_id: task_row.parent_id,
+                    position: task_row.position,
+                    name: task_row.name,
+                    is_done: task_row.is_done,
+                    estimate_minutes: task_row.estimate_minutes,
+                    card: match (
+                        task_row.card_id,
+                        task_row.card_title,
+                        task_row.card_board_id,
+                    ) {
+                        (Some(card_id), Some(card_title), Some(card_board_id)) => Some(TaskCard {
+                            id: card_id,
+                            title: card_title,
+                            board_id: card_board_id,
+                        }),
+                        _ => None,
+                    },
+                    tracked_event_count: task_row.tracked_event_count,
+                    planning: TaskPlanningColumns {
+                        priority: task_row.priority,
+                        due_date_text: task_row.due_date_text,
+                        due_time_text: task_row.due_time_text,
+                        plan_window_start_text: task_row.plan_window_start_text,
+                        plan_window_end_text: task_row.plan_window_end_text,
+                    }
+                    .into_task_planning()?,
+                })
             })
-            .collect())
+            .collect()
     }
 
     pub async fn find_owned_card_ids(
@@ -309,10 +376,17 @@ impl PostgresTaskSource {
         task_id: Uuid,
         task_changes: &TaskChanges,
     ) -> Result<bool, sqlx::Error> {
+        let changed_due = task_changes.due_change.flatten();
+        let changed_plan_window = task_changes.plan_window_change.flatten();
         let update_outcome = sqlx::query!(
             "UPDATE tasks
              SET name = coalesce($3, name),
                  estimate_minutes = CASE WHEN $4 THEN $5 ELSE estimate_minutes END,
+                 priority = coalesce($6, priority),
+                 due_date = CASE WHEN $7 THEN $8::text::date ELSE due_date END,
+                 due_time = CASE WHEN $7 THEN $9::text::time ELSE due_time END,
+                 plan_window_start = CASE WHEN $10 THEN $11::text::time ELSE plan_window_start END,
+                 plan_window_end = CASE WHEN $10 THEN $12::text::time ELSE plan_window_end END,
                  updated_at = now()
              WHERE id = $1 AND group_id = $2",
             task_id,
@@ -320,6 +394,15 @@ impl PostgresTaskSource {
             task_changes.name.as_deref(),
             task_changes.estimate_change.is_some(),
             task_changes.estimate_change.flatten(),
+            task_changes.priority.map(TaskPriority::as_str),
+            task_changes.due_change.is_some(),
+            changed_due.map(|due| due.date.to_string()),
+            changed_due
+                .and_then(|due| due.time)
+                .map(format_wall_clock_time),
+            task_changes.plan_window_change.is_some(),
+            changed_plan_window.map(|plan_window| format_wall_clock_time(plan_window.start)),
+            changed_plan_window.map(|plan_window| format_wall_clock_time(plan_window.end)),
         )
         .execute(executor)
         .await?;
@@ -503,7 +586,13 @@ impl PostgresTaskSource {
     ) -> Result<(), sqlx::Error> {
         sqlx::query!(
             "UPDATE tasks
-             SET group_id = $3, parent_id = $4, position = $5, updated_at = now()
+             SET group_id = $3, parent_id = $4, position = $5,
+                 priority = CASE WHEN $4::uuid IS NULL THEN priority ELSE 'normal' END,
+                 due_date = CASE WHEN $4::uuid IS NULL THEN due_date END,
+                 due_time = CASE WHEN $4::uuid IS NULL THEN due_time END,
+                 plan_window_start = CASE WHEN $4::uuid IS NULL THEN plan_window_start END,
+                 plan_window_end = CASE WHEN $4::uuid IS NULL THEN plan_window_end END,
+                 updated_at = now()
              WHERE id = $1 AND group_id = $2",
             task_id,
             source_group_id,
@@ -800,6 +889,7 @@ pub mod tests {
         let rename = TaskChanges {
             name: Some(String::from("Renamed")),
             estimate_change: Some(Some(30)),
+            ..TaskChanges::default()
         };
         let task_source = PostgresTaskSource;
 

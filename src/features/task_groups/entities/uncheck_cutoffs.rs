@@ -1,5 +1,6 @@
 use uuid::Uuid;
 
+use crate::core::utc_instant::UtcInstant;
 use crate::features::task_groups::entities::group_timetable::GroupTimetable;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -14,6 +15,13 @@ impl UncheckCutoffs {
             .iter()
             .position(|group_id| *group_id == task_group_id)
             .and_then(|group_index| self.cutoff_millis.get(group_index).copied())
+    }
+
+    pub fn is_done(&self, task_group_id: Uuid, completed_at: Option<UtcInstant>) -> bool {
+        completed_at.is_some_and(|completed_at| {
+            self.cutoff_millis_for(task_group_id)
+                .is_none_or(|cutoff_millis| completed_at.unix_millis() >= cutoff_millis)
+        })
     }
 
     pub fn from_timetables<'a>(
@@ -36,7 +44,6 @@ impl UncheckCutoffs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::utc_instant::UtcInstant;
 
     fn timetable_with_last_uncheck(last_uncheck_at: Option<UtcInstant>) -> GroupTimetable {
         GroupTimetable {
@@ -75,5 +82,25 @@ mod tests {
                 cutoff_millis: vec![1_000],
             }
         );
+    }
+
+    #[test]
+    fn a_tick_counts_as_done_only_after_the_group_s_last_uncheck() {
+        let unchecked_group_id = Uuid::now_v7();
+        let unchecked_timetable =
+            timetable_with_last_uncheck(Some(UtcInstant::from_unix_millis(1_000)));
+        let uncheck_cutoffs = UncheckCutoffs::from_timetables(
+            [(unchecked_group_id, &unchecked_timetable)].into_iter(),
+        );
+
+        assert!(uncheck_cutoffs.is_done(
+            unchecked_group_id,
+            Some(UtcInstant::from_unix_millis(1_000))
+        ));
+        assert!(
+            !uncheck_cutoffs.is_done(unchecked_group_id, Some(UtcInstant::from_unix_millis(999)))
+        );
+        assert!(!uncheck_cutoffs.is_done(unchecked_group_id, None));
+        assert!(uncheck_cutoffs.is_done(Uuid::now_v7(), Some(UtcInstant::from_unix_millis(1))));
     }
 }

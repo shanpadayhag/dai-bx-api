@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT check_ins_enabled,\n                      check_in_interval_minutes,\n                      first_check_in_minutes,\n                      to_char(working_hours_start, 'HH24:MI') AS \"working_hours_start!\",\n                      to_char(working_hours_end, 'HH24:MI') AS \"working_hours_end!\",\n                      tracked_category_id,\n                      calendar_time_zone\n               FROM users\n               WHERE id = $1",
+  "query": "SELECT check_ins_enabled,\n                      check_in_interval_minutes,\n                      first_check_in_minutes,\n                      to_char(working_hours_start, 'HH24:MI') AS \"working_hours_start!\",\n                      to_char(working_hours_end, 'HH24:MI') AS \"working_hours_end!\",\n                      tracked_category_id,\n                      calendar_time_zone,\n                      planning_hours AS \"planning_hours: Json<PlanningWeek>\"\n               FROM users\n               WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -69,6 +69,17 @@
             "name": "calendar_time_zone"
           }
         }
+      },
+      {
+        "ordinal": 7,
+        "name": "planning_hours: Json<PlanningWeek>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "planning_hours"
+          }
+        }
       }
     ],
     "parameters": {
@@ -83,8 +94,9 @@
       null,
       null,
       true,
+      true,
       true
     ]
   },
-  "hash": "7f3fadde0dea31cadbdd3233fb753ad8a3ce67a599548afb3605d47b789e5e5e"
+  "hash": "4302d0d35bc115c6fbdac462075be74971d7f01eb16a1127547d5d79e41fe298"
 }

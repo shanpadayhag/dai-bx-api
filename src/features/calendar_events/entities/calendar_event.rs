@@ -13,6 +13,8 @@ pub const PLANNED_TITLE_MAX_CHARACTERS: usize = 200;
 pub const PLANNED_MINIMUM_MINUTES: i64 = 15;
 pub const RANGE_DAY_COUNTS: [i64; 2] = [1, 7];
 pub const FINISH_CLOCK_SKEW_MINUTES: i64 = 2;
+pub const UNLINKABLE_EVENT_MESSAGE: &str =
+    "a repeating event or a schedule block can't be linked to a task";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CalendarEventKind {
@@ -43,6 +45,13 @@ pub struct SeriesOccurrence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkedTask {
+    pub name: String,
+    pub group_name: String,
+    pub completed_at: Option<UtcInstant>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CalendarEvent {
     pub id: Uuid,
     pub kind: CalendarEventKind,
@@ -55,6 +64,8 @@ pub struct CalendarEvent {
     pub last_answered_at: Option<UtcInstant>,
     pub time_zone: Option<String>,
     pub series: Option<SeriesOccurrence>,
+    pub linked_task: Option<LinkedTask>,
+    pub is_schedule_block: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,6 +118,15 @@ pub struct PlannedEventInput {
     pub ends_at: UtcInstant,
     pub time_zone: Option<String>,
     pub repeat: Option<EventRepeat>,
+    pub task_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskBlock {
+    pub task_id: Uuid,
+    pub title: String,
+    pub starts_at: UtcInstant,
+    pub ends_at: UtcInstant,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -117,6 +137,13 @@ pub struct CalendarEventChanges {
     pub ends_at: Option<UtcInstant>,
     pub time_zone_change: Option<Option<String>>,
     pub repeat_change: Option<Option<EventRepeat>>,
+    pub task_change: Option<Option<Uuid>>,
+}
+
+impl CalendarEventChanges {
+    pub fn new_task_id(&self) -> Option<Uuid> {
+        self.task_change.flatten()
+    }
 }
 
 impl CalendarEventChanges {
@@ -133,6 +160,7 @@ impl CalendarEventChanges {
 pub struct ChangedCalendarEvent {
     pub title: String,
     pub category_id: Option<Uuid>,
+    pub task_id: Option<Uuid>,
     pub starts_at: UtcInstant,
     pub ends_at: Option<UtcInstant>,
     pub finished_at: Option<UtcInstant>,
@@ -223,6 +251,7 @@ impl CalendarEvent {
         Ok(ChangedCalendarEvent {
             title: self.title.clone(),
             category_id: self.category_id,
+            task_id: self.task_id(),
             starts_at: self.starts_at,
             ends_at: Some(ends_at),
             finished_at: Some(now),
@@ -241,12 +270,19 @@ impl CalendarEvent {
             CalendarEventKind::Planned => {
                 let ends_at = event_changes.ends_at.or(self.ends_at).unwrap_or(starts_at);
                 validate_planned_times(starts_at, ends_at)?;
+                let task_id = event_changes.task_change.unwrap_or_else(|| self.task_id());
+                if task_id.is_some()
+                    && (self.is_schedule_block || event_changes.new_repeat().is_some())
+                {
+                    return Err(invalid(UNLINKABLE_EVENT_MESSAGE));
+                }
                 Ok(ChangedCalendarEvent {
                     title: event_changes
                         .title
                         .clone()
                         .unwrap_or_else(|| self.title.clone()),
                     category_id,
+                    task_id,
                     starts_at,
                     ends_at: Some(ends_at),
                     finished_at: None,
@@ -257,7 +293,7 @@ impl CalendarEvent {
                 })
             }
             CalendarEventKind::Tracked => {
-                if event_changes.title.is_some() {
+                if event_changes.title.is_some() || event_changes.task_change.is_some() {
                     return Err(invalid("a tracked event keeps its task's or card's name"));
                 }
                 if event_changes.time_zone_change.is_some() || event_changes.repeat_change.is_some()
@@ -275,6 +311,7 @@ impl CalendarEvent {
                     return Ok(ChangedCalendarEvent {
                         title: self.title.clone(),
                         category_id,
+                        task_id: self.task_id(),
                         starts_at,
                         ends_at: None,
                         finished_at: None,
@@ -292,6 +329,7 @@ impl CalendarEvent {
                 Ok(ChangedCalendarEvent {
                     title: self.title.clone(),
                     category_id,
+                    task_id: self.task_id(),
                     starts_at,
                     ends_at: Some(ends_at),
                     finished_at,
@@ -415,6 +453,8 @@ mod tests {
             last_answered_at: None,
             time_zone: None,
             series: None,
+            linked_task: None,
+            is_schedule_block: false,
         }
     }
 
@@ -491,6 +531,77 @@ mod tests {
     }
 
     #[test]
+    fn a_planned_event_links_changes_and_clears_its_task() {
+        let task_id = Uuid::now_v7();
+        let linked_change = planned_event()
+            .apply_changes(
+                &CalendarEventChanges {
+                    task_change: Some(Some(task_id)),
+                    ..CalendarEventChanges::default()
+                },
+                instant(NOW),
+            )
+            .expect("a link should be allowed");
+        let linked_event = CalendarEvent {
+            source: Some(CalendarEventSource::Task {
+                task_id,
+                group_id: Uuid::now_v7(),
+            }),
+            ..planned_event()
+        };
+        let kept_change = linked_event
+            .apply_changes(&CalendarEventChanges::default(), instant(NOW))
+            .expect("no change should be allowed");
+        let cleared_change = linked_event
+            .apply_changes(
+                &CalendarEventChanges {
+                    task_change: Some(None),
+                    ..CalendarEventChanges::default()
+                },
+                instant(NOW),
+            )
+            .expect("a clear should be allowed");
+
+        assert_eq!(linked_change.task_id, Some(task_id));
+        assert_eq!(kept_change.task_id, Some(task_id));
+        assert_eq!(cleared_change.task_id, None);
+    }
+
+    #[test]
+    fn a_task_is_refused_on_a_schedule_block_a_new_repeat_or_a_tracked_event() {
+        let task_changes = CalendarEventChanges {
+            task_change: Some(Some(Uuid::now_v7())),
+            ..CalendarEventChanges::default()
+        };
+        let schedule_block = CalendarEvent {
+            is_schedule_block: true,
+            ..planned_event()
+        };
+        let repeating_changes = CalendarEventChanges {
+            repeat_change: Some(Some(EventRepeat {
+                repeat_rule: serde_json::from_str(
+                    r#"{"frequency":"daily","interval":1,"ends":{"never":true}}"#,
+                )
+                .expect("a valid rule"),
+                input_zone: parse_event_zone("UTC", "inputZone").expect("a known zone"),
+            })),
+            ..task_changes.clone()
+        };
+
+        for (refused_event, refused_changes) in [
+            (&schedule_block, &task_changes),
+            (&planned_event(), &repeating_changes),
+            (
+                &tracked_event(Some("2026-11-05T09:40:00Z"), Some("2026-11-05T09:40:00Z")),
+                &task_changes,
+            ),
+        ] {
+            let change_result = refused_event.apply_changes(refused_changes, instant(NOW));
+            assert!(matches!(change_result, Err(CalendarEventError::Invalid(_))));
+        }
+    }
+
+    #[test]
     fn only_a_task_event_has_a_task_id() {
         let task_id = Uuid::now_v7();
         let task_event = CalendarEvent {
@@ -526,6 +637,7 @@ mod tests {
                     ends_at: Some(instant("2026-11-08T19:00:00Z")),
                     time_zone_change: Some(Some(String::from("Europe/London"))),
                     repeat_change: None,
+                    task_change: None,
                 },
                 instant(NOW),
             )
@@ -536,6 +648,7 @@ mod tests {
             ChangedCalendarEvent {
                 title: String::from("Swim"),
                 category_id: Some(category_id),
+                task_id: None,
                 starts_at: instant("2026-11-06T18:00:00Z"),
                 ends_at: Some(instant("2026-11-08T19:00:00Z")),
                 finished_at: None,

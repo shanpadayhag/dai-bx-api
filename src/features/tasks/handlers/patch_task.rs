@@ -10,10 +10,23 @@ use crate::core::state::AppState;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::tasks::actions::update_task::UpdateTask;
 use crate::features::tasks::entities::task::{
-    TaskChanges, validate_estimate_minutes, validate_task_name,
+    TaskChanges, parse_plan_window, parse_task_due, parse_task_priority, validate_estimate_minutes,
+    validate_task_name,
 };
 use crate::features::tasks::responses::group_tasks_response::GroupTasksResponse;
 use crate::features::throttling::entities::write_session::WriteSession;
+
+#[derive(Deserialize)]
+pub struct TaskDueRequest {
+    pub date: String,
+    pub time: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct PlanBetweenRequest {
+    pub start: String,
+    pub end: String,
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +34,11 @@ pub struct PatchTaskRequest {
     pub name: Option<String>,
     #[serde(default, deserialize_with = "deserialize_present_field")]
     pub estimate_minutes: Option<Option<i64>>,
+    pub priority: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_present_field")]
+    pub due: Option<Option<TaskDueRequest>>,
+    #[serde(default, deserialize_with = "deserialize_present_field")]
+    pub plan_between: Option<Option<PlanBetweenRequest>>,
     #[serde(default)]
     pub rename_events: bool,
 }
@@ -42,6 +60,30 @@ pub async fn patch_task(
         estimate_change: patch_request
             .estimate_minutes
             .map(|estimate_minutes| estimate_minutes.map(validate_estimate_minutes).transpose())
+            .transpose()?,
+        priority: patch_request
+            .priority
+            .as_deref()
+            .map(parse_task_priority)
+            .transpose()?,
+        due_change: patch_request
+            .due
+            .as_ref()
+            .map(|due| {
+                due.as_ref()
+                    .map(|due| parse_task_due(&due.date, due.time.as_deref()))
+                    .transpose()
+            })
+            .transpose()?,
+        plan_window_change: patch_request
+            .plan_between
+            .as_ref()
+            .map(|plan_between| {
+                plan_between
+                    .as_ref()
+                    .map(|plan_between| parse_plan_window(&plan_between.start, &plan_between.end))
+                    .transpose()
+            })
             .transpose()?,
     };
     let group_tasks = UpdateTask::new(&app_state.db_pool)

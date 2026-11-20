@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tasks\n             SET group_id = $3, parent_id = $4, position = $5,\n                 priority = CASE WHEN $4::uuid IS NULL THEN priority ELSE 'normal' END,\n                 due_date = CASE WHEN $4::uuid IS NULL THEN due_date END,\n                 due_time = CASE WHEN $4::uuid IS NULL THEN due_time END,\n                 plan_window_start = CASE WHEN $4::uuid IS NULL THEN plan_window_start END,\n                 plan_window_end = CASE WHEN $4::uuid IS NULL THEN plan_window_end END,\n                 updated_at = now()\n             WHERE id = $1 AND group_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ffc85caf8eaccedf8ec10b722a9ae8f9a7a334d1a91079a9a6d22c2c6d2f8bca"
+}

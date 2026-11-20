@@ -1,8 +1,20 @@
+use serde::Serialize;
+
 use crate::core::recurrence::RepeatRule;
 use crate::features::calendar_events::entities::calendar_event::{
     CalendarEvent, CalendarEventSource, SeriesOccurrence,
 };
-use serde::Serialize;
+use crate::features::task_groups::entities::uncheck_cutoffs::UncheckCutoffs;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedTaskResponse {
+    pub id: String,
+    pub name: String,
+    pub group_id: String,
+    pub group_name: String,
+    pub done: bool,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,10 +47,30 @@ pub struct CalendarEventResponse {
     pub source: Option<CalendarEventSourceResponse>,
     pub time_zone: Option<String>,
     pub series: Option<SeriesOccurrenceResponse>,
+    pub task: Option<LinkedTaskResponse>,
+    pub is_schedule_block: bool,
 }
 
 impl From<CalendarEvent> for CalendarEventResponse {
     fn from(calendar_event: CalendarEvent) -> Self {
+        Self::new(calendar_event, &UncheckCutoffs::default())
+    }
+}
+
+impl CalendarEventResponse {
+    pub fn new(calendar_event: CalendarEvent, uncheck_cutoffs: &UncheckCutoffs) -> Self {
+        let task = match (calendar_event.source, calendar_event.linked_task) {
+            (Some(CalendarEventSource::Task { task_id, group_id }), Some(linked_task)) => {
+                Some(LinkedTaskResponse {
+                    id: task_id.to_string(),
+                    name: linked_task.name,
+                    group_id: group_id.to_string(),
+                    group_name: linked_task.group_name,
+                    done: uncheck_cutoffs.is_done(group_id, linked_task.completed_at),
+                })
+            }
+            _ => None,
+        };
         let event_id = match &calendar_event.series {
             Some(series_occurrence) => format!(
                 "{}:{}",
@@ -88,6 +120,8 @@ impl From<CalendarEvent> for CalendarEventResponse {
                         repeat: series_occurrence.repeat_rule,
                     },
                 ),
+            task,
+            is_schedule_block: calendar_event.is_schedule_block,
         }
     }
 }

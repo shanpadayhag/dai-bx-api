@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::core::recurrence::{RepeatRule, to_local};
 use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
+use crate::core::wall_clock;
 use crate::features::task_groups::entities::group_timetable::{
     GroupTimetable, ShowRule, ShowWindow, UncheckRule,
 };
@@ -70,10 +71,7 @@ pub fn today_in(time_zone: &TimeZone, now: UtcInstant) -> Result<Date, TaskGroup
 }
 
 pub fn parse_wall_clock_time(time_text: &str) -> Result<Time, TaskGroupError> {
-    let is_hours_and_minutes = time_text.len() == 5 && time_text.as_bytes().get(2) == Some(&b':');
-    is_hours_and_minutes
-        .then(|| time_text.parse::<Time>().ok())
-        .flatten()
+    wall_clock::parse_wall_clock_time(time_text)
         .ok_or_else(|| TaskGroupError::Invalid(String::from("a time is written as HH:MM")))
 }
 

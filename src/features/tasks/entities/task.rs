@@ -1,5 +1,8 @@
+use jiff::civil::{Date, Time};
 use uuid::Uuid;
 
+use crate::core::recurrence::parse_calendar_date;
+use crate::core::wall_clock::{WallClockWindow, parse_wall_clock_time};
 use crate::features::task_groups::entities::task_group::TaskGroupDetails;
 use crate::features::tasks::error::TaskError;
 
@@ -14,6 +17,46 @@ pub struct TaskCard {
     pub board_id: Uuid,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TaskPriority {
+    High,
+    #[default]
+    Normal,
+    Low,
+}
+
+impl TaskPriority {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TaskPriority::High => "high",
+            TaskPriority::Normal => "normal",
+            TaskPriority::Low => "low",
+        }
+    }
+
+    pub fn parse(priority_text: &str) -> Option<Self> {
+        match priority_text {
+            "high" => Some(TaskPriority::High),
+            "normal" => Some(TaskPriority::Normal),
+            "low" => Some(TaskPriority::Low),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaskDue {
+    pub date: Date,
+    pub time: Option<Time>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TaskPlanning {
+    pub priority: TaskPriority,
+    pub due: Option<TaskDue>,
+    pub plan_window: Option<WallClockWindow>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Task {
     pub id: Uuid,
@@ -24,6 +67,7 @@ pub struct Task {
     pub estimate_minutes: Option<i32>,
     pub card: Option<TaskCard>,
     pub tracked_event_count: i64,
+    pub planning: TaskPlanning,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +106,15 @@ pub struct NewTask {
 pub struct TaskChanges {
     pub name: Option<String>,
     pub estimate_change: Option<Option<i32>>,
+    pub priority: Option<TaskPriority>,
+    pub due_change: Option<Option<TaskDue>>,
+    pub plan_window_change: Option<Option<WallClockWindow>>,
+}
+
+impl TaskChanges {
+    pub fn touches_planning(&self) -> bool {
+        self.priority.is_some() || self.due_change.is_some() || self.plan_window_change.is_some()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +175,29 @@ pub fn validate_estimate_minutes(raw_estimate_minutes: i64) -> Result<i32, TaskE
         .map_err(|_| TaskError::Invalid(String::from("an estimate is 1 minute to 24 hours")))
 }
 
+pub fn parse_task_priority(priority_text: &str) -> Result<TaskPriority, TaskError> {
+    TaskPriority::parse(priority_text)
+        .ok_or_else(|| TaskError::Invalid(String::from("a priority is high, normal or low")))
+}
+
+pub fn parse_task_due(date_text: &str, time_text: Option<&str>) -> Result<TaskDue, TaskError> {
+    let date = parse_calendar_date(date_text)
+        .ok_or_else(|| TaskError::Invalid(String::from("a date is written as YYYY-MM-DD")))?;
+    let time = time_text.map(parse_task_time).transpose()?;
+    Ok(TaskDue { date, time })
+}
+
+pub fn parse_plan_window(start_text: &str, end_text: &str) -> Result<WallClockWindow, TaskError> {
+    WallClockWindow::new(parse_task_time(start_text)?, parse_task_time(end_text)?).ok_or_else(
+        || TaskError::Invalid(String::from("a window starts and ends at different times")),
+    )
+}
+
+fn parse_task_time(time_text: &str) -> Result<Time, TaskError> {
+    parse_wall_clock_time(time_text)
+        .ok_or_else(|| TaskError::Invalid(String::from("a time is written as HH:MM")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,6 +212,7 @@ mod tests {
             estimate_minutes: None,
             card: None,
             tracked_event_count: 0,
+            planning: TaskPlanning::default(),
         }
     }
 
@@ -159,6 +236,24 @@ mod tests {
         assert!(validate_task_name("").is_err());
         assert!(validate_task_name(&"a".repeat(500)).is_ok());
         assert!(validate_task_name(&"a".repeat(501)).is_err());
+    }
+
+    #[test]
+    fn high_priority_sorts_before_normal_and_low() {
+        assert!(TaskPriority::High < TaskPriority::Normal);
+        assert!(TaskPriority::Normal < TaskPriority::Low);
+        assert_eq!(TaskPriority::parse("low"), Some(TaskPriority::Low));
+        assert_eq!(TaskPriority::parse("Low"), None);
+    }
+
+    #[test]
+    fn reads_a_due_date_with_an_optional_time() {
+        let due = parse_task_due("2026-11-21", Some("17:00")).expect("valid");
+
+        assert_eq!(due.date, jiff::civil::date(2026, 11, 21));
+        assert_eq!(due.time, Some(jiff::civil::time(17, 0, 0, 0)));
+        assert!(parse_task_due("2026-02-30", None).is_err());
+        assert!(parse_task_due("2026-11-21", Some("5pm")).is_err());
     }
 
     #[test]

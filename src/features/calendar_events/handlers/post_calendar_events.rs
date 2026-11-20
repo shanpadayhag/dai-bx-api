@@ -6,8 +6,11 @@ use uuid::Uuid;
 
 use crate::core::error::AppError;
 use crate::core::recurrence::RepeatRule;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::actions::create_planned_event::CreatePlannedEvent;
+use crate::features::calendar_events::actions::find_linked_task_cutoffs::FindLinkedTaskCutoffs;
 use crate::features::calendar_events::entities::calendar_event::{
     EventRepeat, PlannedEventInput, parse_event_moment, parse_event_zone, validate_planned_times,
     validate_planned_title,
@@ -25,11 +28,17 @@ pub struct PostCalendarEventRequest {
     pub input_zone: String,
     pub time_zone: Option<String>,
     pub repeat: Option<RepeatRule>,
+    pub task_id: Option<String>,
+}
+
+pub fn parse_task_id(task_id_text: &str) -> Result<Uuid, AppError> {
+    Uuid::parse_str(task_id_text).map_err(|_| AppError::NotFound)
 }
 
 pub async fn post_calendar_events(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Json(post_request): Json<PostCalendarEventRequest>,
 ) -> Result<(StatusCode, Json<CalendarEventResponse>), AppError> {
     let input_zone = parse_event_zone(&post_request.input_zone, "inputZone")?;
@@ -58,9 +67,25 @@ pub async fn post_calendar_events(
             repeat_rule,
             input_zone,
         }),
+        task_id: post_request
+            .task_id
+            .as_deref()
+            .map(parse_task_id)
+            .transpose()?,
     };
     let created_event = CreatePlannedEvent::new(&app_state.db_pool)
         .execute(write_session.user_id, &planned_event_input)
         .await?;
-    Ok((StatusCode::CREATED, Json(created_event.into())))
+    let uncheck_cutoffs = FindLinkedTaskCutoffs::new(&app_state.db_pool)
+        .execute(
+            write_session.user_id,
+            [&created_event],
+            &request_time_zone,
+            UtcInstant::now(),
+        )
+        .await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(CalendarEventResponse::new(created_event, &uncheck_cutoffs)),
+    ))
 }

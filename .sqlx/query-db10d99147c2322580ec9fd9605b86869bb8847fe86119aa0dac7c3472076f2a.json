@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT calendar_events.id,\n                      calendar_events.kind = 'tracked' AS \"is_tracked!\",\n                      calendar_events.title,\n                      calendar_events.category_id,\n                      calendar_events.task_id,\n                      NULL::uuid AS \"task_group_id?\",\n                      calendar_events.card_id,\n                      NULL::uuid AS \"card_board_id?\",\n                      (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS \"starts_at_millis!\",\n                      (extract(epoch FROM calendar_events.ends_at) * 1000)::bigint AS ends_at_millis,\n                      (extract(epoch FROM calendar_events.finished_at) * 1000)::bigint AS finished_at_millis,\n                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis,\n                      calendar_events.time_zone,\n                      calendar_events.series_id,\n                      (extract(epoch FROM calendar_events.original_start) * 1000)::bigint AS original_start_millis,\n                      event_series.repeat_rule AS \"series_repeat_rule?: Json<RepeatRule>\"\n               FROM calendar_events\n               JOIN event_series ON event_series.id = calendar_events.series_id\n               WHERE calendar_events.user_id = $1\n                 AND calendar_events.series_id = $2\n                 AND calendar_events.original_start\n                     = 'epoch'::timestamptz + $3::bigint * interval '1 millisecond'\n               FOR UPDATE OF calendar_events",
+  "query": "SELECT calendar_events.id,\n                      calendar_events.kind = 'tracked' AS \"is_tracked!\",\n                      calendar_events.title,\n                      calendar_events.category_id,\n                      calendar_events.task_id,\n                      tasks.group_id AS \"task_group_id?\",\n                      calendar_events.card_id,\n                      cards.board_id AS \"card_board_id?\",\n                      (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS \"starts_at_millis!\",\n                      (extract(epoch FROM calendar_events.ends_at) * 1000)::bigint AS ends_at_millis,\n                      (extract(epoch FROM calendar_events.finished_at) * 1000)::bigint AS finished_at_millis,\n                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis,\n                      calendar_events.time_zone,\n                      calendar_events.series_id,\n                      (extract(epoch FROM calendar_events.original_start) * 1000)::bigint AS original_start_millis,\n                      event_series.repeat_rule AS \"series_repeat_rule?: Json<RepeatRule>\",\n                      CASE WHEN calendar_events.kind = 'planned' THEN tasks.name END AS \"linked_task_name?\",\n                      CASE WHEN calendar_events.kind = 'planned' THEN task_groups.name END AS \"linked_group_name?\",\n                      CASE WHEN calendar_events.kind = 'planned'\n                           THEN (extract(epoch FROM tasks.completed_at) * 1000)::bigint END AS \"linked_completed_at_millis?\",\n                      calendar_events.schedule_id IS NOT NULL AS \"is_schedule_block!\"\n               FROM calendar_events\n               LEFT JOIN tasks ON tasks.id = calendar_events.task_id\n               LEFT JOIN task_groups ON task_groups.id = tasks.group_id\n               LEFT JOIN cards ON cards.id = calendar_events.card_id\n               LEFT JOIN event_series ON event_series.id = calendar_events.series_id\n               WHERE calendar_events.id = $2 AND calendar_events.user_id = $1\n               FOR UPDATE OF calendar_events",
   "describe": {
     "columns": [
       {
@@ -57,7 +57,12 @@
         "ordinal": 5,
         "name": "task_group_id?",
         "type_info": "Uuid",
-        "origin": "Expression"
+        "origin": {
+          "Table": {
+            "table": "tasks",
+            "name": "group_id"
+          }
+        }
       },
       {
         "ordinal": 6,
@@ -74,7 +79,12 @@
         "ordinal": 7,
         "name": "card_board_id?",
         "type_info": "Uuid",
-        "origin": "Expression"
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "board_id"
+          }
+        }
       },
       {
         "ordinal": 8,
@@ -138,13 +148,36 @@
             "name": "repeat_rule"
           }
         }
+      },
+      {
+        "ordinal": 16,
+        "name": "linked_task_name?",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 17,
+        "name": "linked_group_name?",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 18,
+        "name": "linked_completed_at_millis?",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 19,
+        "name": "is_schedule_block!",
+        "type_info": "Bool",
+        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -153,18 +186,22 @@
       false,
       true,
       true,
+      false,
+      true,
+      false,
+      null,
+      null,
+      null,
       null,
       true,
-      null,
-      null,
-      null,
-      null,
-      null,
-      true,
       true,
       null,
-      false
+      false,
+      null,
+      null,
+      null,
+      null
     ]
   },
-  "hash": "1cf38eea0657f1f740356dae0453932096998dfffb049307189e012c16430a73"
+  "hash": "db10d99147c2322580ec9fd9605b86869bb8847fe86119aa0dac7c3472076f2a"
 }

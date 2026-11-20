@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE users\n               SET check_ins_enabled = coalesce($2, check_ins_enabled),\n                   check_in_interval_minutes = coalesce($3, check_in_interval_minutes),\n                   first_check_in_minutes = coalesce($4, first_check_in_minutes),\n                   working_hours_start = coalesce($5::text::time, working_hours_start),\n                   working_hours_end = coalesce($6::text::time, working_hours_end),\n                   tracked_category_id = CASE WHEN $7 THEN $8 ELSE tracked_category_id END,\n                   calendar_time_zone = CASE WHEN $9 THEN $10 ELSE calendar_time_zone END,\n                   updated_at = now()\n               WHERE id = $1\n               RETURNING check_ins_enabled,\n                         check_in_interval_minutes,\n                         first_check_in_minutes,\n                         to_char(working_hours_start, 'HH24:MI') AS \"working_hours_start!\",\n                         to_char(working_hours_end, 'HH24:MI') AS \"working_hours_end!\",\n                         tracked_category_id,\n                         calendar_time_zone",
+  "query": "UPDATE users\n               SET check_ins_enabled = coalesce($2, check_ins_enabled),\n                   check_in_interval_minutes = coalesce($3, check_in_interval_minutes),\n                   first_check_in_minutes = coalesce($4, first_check_in_minutes),\n                   working_hours_start = coalesce($5::text::time, working_hours_start),\n                   working_hours_end = coalesce($6::text::time, working_hours_end),\n                   tracked_category_id = CASE WHEN $7 THEN $8 ELSE tracked_category_id END,\n                   calendar_time_zone = CASE WHEN $9 THEN $10 ELSE calendar_time_zone END,\n                   planning_hours = CASE WHEN $11 THEN $12 ELSE planning_hours END,\n                   updated_at = now()\n               WHERE id = $1\n               RETURNING check_ins_enabled,\n                         check_in_interval_minutes,\n                         first_check_in_minutes,\n                         to_char(working_hours_start, 'HH24:MI') AS \"working_hours_start!\",\n                         to_char(working_hours_end, 'HH24:MI') AS \"working_hours_end!\",\n                         tracked_category_id,\n                         calendar_time_zone,\n                         planning_hours AS \"planning_hours: Json<PlanningWeek>\"",
   "describe": {
     "columns": [
       {
@@ -69,6 +69,17 @@
             "name": "calendar_time_zone"
           }
         }
+      },
+      {
+        "ordinal": 7,
+        "name": "planning_hours: Json<PlanningWeek>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "planning_hours"
+          }
+        }
       }
     ],
     "parameters": {
@@ -82,7 +93,9 @@
         "Bool",
         "Uuid",
         "Bool",
-        "Text"
+        "Text",
+        "Bool",
+        "Jsonb"
       ]
     },
     "nullable": [
@@ -92,8 +105,9 @@
       null,
       null,
       true,
+      true,
       true
     ]
   },
-  "hash": "569e1e05b629c6499c8130c37af6f39f8d06a9bba1aaff450ac6a0a4c6cdfa0d"
+  "hash": "5963c7236a6ec410f956cbaf25e9863083348ceed01cb85b17e68f6f12c6da85"
 }

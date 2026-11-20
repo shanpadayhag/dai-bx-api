@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT event_series.id,\n                      event_series.title,\n                      event_series.category_id,\n                      event_series.time_zone,\n                      to_char(event_series.local_start, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS \"local_start_text!\",\n                      event_series.duration_minutes,\n                      event_series.repeat_rule AS \"repeat_rule: Json<RepeatRule>\",\n                      (extract(epoch FROM event_series.until_instant) * 1000)::bigint AS until_instant_millis,\n                      coalesce(\n                          (SELECT array_agg((extract(epoch FROM event_exceptions.original_start) * 1000)::bigint\n                                            ORDER BY event_exceptions.original_start)\n                           FROM event_exceptions\n                           WHERE event_exceptions.series_id = event_series.id),\n                          '{}'\n                      ) AS \"cancelled_start_millis!\"\n               FROM event_series\n               WHERE event_series.id = $2\n                 AND event_series.user_id = $1\n                 AND NOT event_series.hidden\n               FOR UPDATE OF event_series",
+  "query": "SELECT event_series.id,\n                      event_series.title,\n                      event_series.category_id,\n                      event_series.time_zone,\n                      to_char(event_series.local_start, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS \"local_start_text!\",\n                      event_series.duration_minutes,\n                      event_series.repeat_rule AS \"repeat_rule: Json<RepeatRule>\",\n                      (extract(epoch FROM event_series.until_instant) * 1000)::bigint AS until_instant_millis,\n                      coalesce(\n                          (SELECT array_agg((extract(epoch FROM event_exceptions.original_start) * 1000)::bigint\n                                            ORDER BY event_exceptions.original_start)\n                           FROM event_exceptions\n                           WHERE event_exceptions.series_id = event_series.id),\n                          '{}'\n                      ) AS \"cancelled_start_millis!\",\n                      event_series.schedule_id IS NOT NULL AS \"is_schedule_block!\"\n               FROM event_series\n               WHERE event_series.id = $2\n                 AND event_series.user_id = $1\n                 AND NOT event_series.hidden\n               FOR UPDATE OF event_series",
   "describe": {
     "columns": [
       {
@@ -86,6 +86,12 @@
         "name": "cancelled_start_millis!",
         "type_info": "Int8Array",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_schedule_block!",
+        "type_info": "Bool",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -103,8 +109,9 @@
       false,
       false,
       null,
+      null,
       null
     ]
   },
-  "hash": "e234d4f5b644b1780b47ad5a378bfd13488c21c5af00f139d155dd026d205239"
+  "hash": "423a47f4128c83ae3f5f6dd0f4ed0a61caae624ba28792c42fc75508c20182ff"
 }

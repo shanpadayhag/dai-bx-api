@@ -3,7 +3,10 @@ use axum::extract::{Query, State};
 use serde::Deserialize;
 
 use crate::core::error::AppError;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
+use crate::core::utc_instant::UtcInstant;
+use crate::features::calendar_events::actions::find_linked_task_cutoffs::FindLinkedTaskCutoffs;
 use crate::features::calendar_events::actions::list_calendar_events::ListCalendarEvents;
 use crate::features::calendar_events::entities::calendar_event::{
     parse_event_zone, validate_event_range,
@@ -22,6 +25,7 @@ pub struct GetCalendarEventsQuery {
 pub async fn get_calendar_events(
     State(app_state): State<AppState>,
     current_session: CurrentSession,
+    request_time_zone: RequestTimeZone,
     Query(events_query): Query<GetCalendarEventsQuery>,
 ) -> Result<Json<CalendarRangeResponse>, AppError> {
     let range_zone = parse_event_zone(
@@ -36,5 +40,16 @@ pub async fn get_calendar_events(
     let calendar_range = ListCalendarEvents::new(&app_state.db_pool)
         .execute(current_session.user_id, event_range)
         .await?;
-    Ok(Json(calendar_range.into()))
+    let uncheck_cutoffs = FindLinkedTaskCutoffs::new(&app_state.db_pool)
+        .execute(
+            current_session.user_id,
+            &calendar_range.events,
+            &request_time_zone,
+            UtcInstant::now(),
+        )
+        .await?;
+    Ok(Json(CalendarRangeResponse::new(
+        calendar_range,
+        &uncheck_cutoffs,
+    )))
 }

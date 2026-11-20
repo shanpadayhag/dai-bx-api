@@ -6,8 +6,8 @@ use crate::core::recurrence::RepeatRule;
 use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::entities::calendar_event::{
     CalendarEvent, CalendarEventKind, CalendarEventSource, ChangedCalendarEvent, ClosingScope,
-    EventRange, EventWrite, NewCalendarEvent, NewRunningEvent, RunningItem, RunningOpen,
-    SeriesOccurrence, TrackedSubject,
+    EventRange, EventWrite, LinkedTask, NewCalendarEvent, NewRunningEvent, RunningItem,
+    RunningOpen, SeriesOccurrence, TaskBlock, TrackedSubject,
 };
 
 #[derive(Default)]
@@ -30,6 +30,10 @@ struct CalendarEventRow {
     series_id: Option<Uuid>,
     original_start_millis: Option<i64>,
     series_repeat_rule: Option<Json<RepeatRule>>,
+    linked_task_name: Option<String>,
+    linked_group_name: Option<String>,
+    linked_completed_at_millis: Option<i64>,
+    is_schedule_block: bool,
 }
 
 impl From<CalendarEventRow> for CalendarEvent {
@@ -44,6 +48,16 @@ impl From<CalendarEventRow> for CalendarEvent {
             }
             (None, None) => None,
         };
+        let linked_task = event_row
+            .linked_task_name
+            .zip(event_row.linked_group_name)
+            .map(|(name, group_name)| LinkedTask {
+                name,
+                group_name,
+                completed_at: event_row
+                    .linked_completed_at_millis
+                    .map(UtcInstant::from_unix_millis),
+            });
         Self {
             id: event_row.id,
             kind: if event_row.is_tracked {
@@ -77,6 +91,8 @@ impl From<CalendarEventRow> for CalendarEvent {
                 }
                 _ => None,
             },
+            linked_task,
+            is_schedule_block: event_row.is_schedule_block,
         }
     }
 }
@@ -117,6 +133,10 @@ impl From<RunningItemRow> for RunningItem {
                 series_id: None,
                 original_start_millis: None,
                 series_repeat_rule: None,
+                linked_task_name: None,
+                linked_group_name: None,
+                linked_completed_at_millis: None,
+                is_schedule_block: false,
             }),
         }
     }
@@ -167,9 +187,15 @@ impl PostgresCalendarEventSource {
                       calendar_events.time_zone,
                       calendar_events.series_id,
                       (extract(epoch FROM calendar_events.original_start) * 1000)::bigint AS original_start_millis,
-                      event_series.repeat_rule AS "series_repeat_rule?: Json<RepeatRule>"
+                      event_series.repeat_rule AS "series_repeat_rule?: Json<RepeatRule>",
+                      CASE WHEN calendar_events.kind = 'planned' THEN tasks.name END AS "linked_task_name?",
+                      CASE WHEN calendar_events.kind = 'planned' THEN task_groups.name END AS "linked_group_name?",
+                      CASE WHEN calendar_events.kind = 'planned'
+                           THEN (extract(epoch FROM tasks.completed_at) * 1000)::bigint END AS "linked_completed_at_millis?",
+                      calendar_events.schedule_id IS NOT NULL AS "is_schedule_block!"
                FROM calendar_events
                LEFT JOIN tasks ON tasks.id = calendar_events.task_id
+               LEFT JOIN task_groups ON task_groups.id = tasks.group_id
                LEFT JOIN cards ON cards.id = calendar_events.card_id
                LEFT JOIN event_series ON event_series.id = calendar_events.series_id
                WHERE calendar_events.user_id = $1
@@ -184,6 +210,99 @@ impl PostgresCalendarEventSource {
         .fetch_all(executor)
         .await?;
         Ok(event_rows.into_iter().map(CalendarEvent::from).collect())
+    }
+
+    pub async fn list_by_ids(
+        &self,
+        executor: impl PgExecutor<'_>,
+        user_id: Uuid,
+        event_ids: &[Uuid],
+    ) -> Result<Vec<CalendarEvent>, sqlx::Error> {
+        let event_rows = sqlx::query_as!(
+            CalendarEventRow,
+            r#"SELECT calendar_events.id,
+                      calendar_events.kind = 'tracked' AS "is_tracked!",
+                      calendar_events.title,
+                      calendar_events.category_id,
+                      calendar_events.task_id,
+                      tasks.group_id AS "task_group_id?",
+                      calendar_events.card_id,
+                      cards.board_id AS "card_board_id?",
+                      (extract(epoch FROM calendar_events.starts_at) * 1000)::bigint AS "starts_at_millis!",
+                      (extract(epoch FROM calendar_events.ends_at) * 1000)::bigint AS ends_at_millis,
+                      (extract(epoch FROM calendar_events.finished_at) * 1000)::bigint AS finished_at_millis,
+                      (extract(epoch FROM calendar_events.last_answered_at) * 1000)::bigint AS last_answered_at_millis,
+                      calendar_events.time_zone,
+                      calendar_events.series_id,
+                      (extract(epoch FROM calendar_events.original_start) * 1000)::bigint AS original_start_millis,
+                      event_series.repeat_rule AS "series_repeat_rule?: Json<RepeatRule>",
+                      CASE WHEN calendar_events.kind = 'planned' THEN tasks.name END AS "linked_task_name?",
+                      CASE WHEN calendar_events.kind = 'planned' THEN task_groups.name END AS "linked_group_name?",
+                      CASE WHEN calendar_events.kind = 'planned'
+                           THEN (extract(epoch FROM tasks.completed_at) * 1000)::bigint END AS "linked_completed_at_millis?",
+                      calendar_events.schedule_id IS NOT NULL AS "is_schedule_block!"
+               FROM calendar_events
+               LEFT JOIN tasks ON tasks.id = calendar_events.task_id
+               LEFT JOIN task_groups ON task_groups.id = tasks.group_id
+               LEFT JOIN cards ON cards.id = calendar_events.card_id
+               LEFT JOIN event_series ON event_series.id = calendar_events.series_id
+               WHERE calendar_events.user_id = $1 AND calendar_events.id = ANY($2)
+               ORDER BY calendar_events.starts_at, calendar_events.id"#,
+            user_id,
+            event_ids,
+        )
+        .fetch_all(executor)
+        .await?;
+        Ok(event_rows.into_iter().map(CalendarEvent::from).collect())
+    }
+
+    pub async fn insert_task_blocks(
+        &self,
+        executor: impl PgExecutor<'_>,
+        user_id: Uuid,
+        category_id: Option<Uuid>,
+        time_zone: Option<&str>,
+        block_ids: &[Uuid],
+        task_blocks: &[TaskBlock],
+    ) -> Result<EventWrite, sqlx::Error> {
+        let titles: Vec<&str> = task_blocks
+            .iter()
+            .map(|task_block| task_block.title.as_str())
+            .collect();
+        let task_ids: Vec<Uuid> = task_blocks
+            .iter()
+            .map(|task_block| task_block.task_id)
+            .collect();
+        let starts_millis: Vec<i64> = task_blocks
+            .iter()
+            .map(|task_block| task_block.starts_at.unix_millis())
+            .collect();
+        let ends_millis: Vec<i64> = task_blocks
+            .iter()
+            .map(|task_block| task_block.ends_at.unix_millis())
+            .collect();
+        let insert_result = sqlx::query!(
+            "INSERT INTO calendar_events
+                 (id, user_id, kind, title, category_id, task_id, starts_at, ends_at, time_zone)
+             SELECT task_block.id, $1, 'planned', task_block.title, $2, task_block.task_id,
+                    'epoch'::timestamptz + task_block.starts_millis * interval '1 millisecond',
+                    'epoch'::timestamptz + task_block.ends_millis * interval '1 millisecond',
+                    $3
+             FROM unnest($4::uuid[], $5::text[], $6::uuid[], $7::bigint[], $8::bigint[])
+                  AS task_block(id, title, task_id, starts_millis, ends_millis)",
+            user_id,
+            category_id,
+            time_zone,
+            block_ids,
+            &titles as &[&str],
+            &task_ids,
+            &starts_millis,
+            &ends_millis,
+        )
+        .execute(executor)
+        .await
+        .map(|_| ());
+        write_outcome(insert_result)
     }
 
     pub async fn find_locked(
@@ -209,9 +328,15 @@ impl PostgresCalendarEventSource {
                       calendar_events.time_zone,
                       calendar_events.series_id,
                       (extract(epoch FROM calendar_events.original_start) * 1000)::bigint AS original_start_millis,
-                      event_series.repeat_rule AS "series_repeat_rule?: Json<RepeatRule>"
+                      event_series.repeat_rule AS "series_repeat_rule?: Json<RepeatRule>",
+                      CASE WHEN calendar_events.kind = 'planned' THEN tasks.name END AS "linked_task_name?",
+                      CASE WHEN calendar_events.kind = 'planned' THEN task_groups.name END AS "linked_group_name?",
+                      CASE WHEN calendar_events.kind = 'planned'
+                           THEN (extract(epoch FROM tasks.completed_at) * 1000)::bigint END AS "linked_completed_at_millis?",
+                      calendar_events.schedule_id IS NOT NULL AS "is_schedule_block!"
                FROM calendar_events
                LEFT JOIN tasks ON tasks.id = calendar_events.task_id
+               LEFT JOIN task_groups ON task_groups.id = tasks.group_id
                LEFT JOIN cards ON cards.id = calendar_events.card_id
                LEFT JOIN event_series ON event_series.id = calendar_events.series_id
                WHERE calendar_events.id = $2 AND calendar_events.user_id = $1
@@ -248,7 +373,11 @@ impl PostgresCalendarEventSource {
                       calendar_events.time_zone,
                       calendar_events.series_id,
                       (extract(epoch FROM calendar_events.original_start) * 1000)::bigint AS original_start_millis,
-                      event_series.repeat_rule AS "series_repeat_rule?: Json<RepeatRule>"
+                      event_series.repeat_rule AS "series_repeat_rule?: Json<RepeatRule>",
+                      NULL::text AS "linked_task_name?",
+                      NULL::text AS "linked_group_name?",
+                      NULL::bigint AS "linked_completed_at_millis?",
+                      false AS "is_schedule_block!"
                FROM calendar_events
                JOIN event_series ON event_series.id = calendar_events.series_id
                WHERE calendar_events.user_id = $1
@@ -381,6 +510,7 @@ impl PostgresCalendarEventSource {
                  ends_at = 'epoch'::timestamptz + $6::bigint * interval '1 millisecond',
                  finished_at = 'epoch'::timestamptz + $7::bigint * interval '1 millisecond',
                  time_zone = $8,
+                 task_id = $9,
                  updated_at = now()
              WHERE id = $2 AND user_id = $1",
             user_id,
@@ -391,11 +521,27 @@ impl PostgresCalendarEventSource {
             millis_of(changed_event.ends_at),
             millis_of(changed_event.finished_at),
             changed_event.time_zone.as_deref(),
+            changed_event.task_id,
         )
         .execute(executor)
         .await
         .map(|_| ());
         write_outcome(update_result)
+    }
+
+    pub async fn find_task_parent_id(
+        &self,
+        executor: impl PgExecutor<'_>,
+        user_id: Uuid,
+        task_id: Uuid,
+    ) -> Result<Option<Option<Uuid>>, sqlx::Error> {
+        sqlx::query_scalar!(
+            "SELECT parent_id FROM tasks WHERE id = $2 AND user_id = $1",
+            user_id,
+            task_id,
+        )
+        .fetch_optional(executor)
+        .await
     }
 
     pub async fn find_task_id(
@@ -799,8 +945,60 @@ pub mod tests {
                 last_answered_at: Some(instant("2026-11-05T09:40:00.123Z")),
                 time_zone: None,
                 series: None,
+                linked_task: None,
+                is_schedule_block: false,
             }
         );
+    }
+
+    #[sqlx::test]
+    async fn reads_the_linked_task_of_a_planned_event(db_pool: PgPool) {
+        let user_id = seed_user_id(&db_pool, "owner@example.com").await;
+        let (task_id, _) = seed_task_ids(&db_pool, user_id).await;
+        let event_id = seed_event(
+            &db_pool,
+            &NewCalendarEvent {
+                task_id: Some(task_id),
+                ends_at: Some(instant("2026-11-05T10:00:00Z")),
+                ..new_event(user_id, CalendarEventKind::Planned)
+            },
+        )
+        .await;
+
+        let stored_event = find_event(&db_pool, user_id, event_id).await;
+        let listed_events = PostgresCalendarEventSource
+            .list_in_range(&db_pool, user_id, week_range())
+            .await
+            .expect("the list should run");
+
+        let expected_task = Some(LinkedTask {
+            name: String::from("Write the changelog"),
+            group_name: String::from("DaiBX"),
+            completed_at: None,
+        });
+        assert_eq!(stored_event.task_id(), Some(task_id));
+        assert_eq!(stored_event.linked_task, expected_task);
+        assert_eq!(listed_events[0].linked_task, expected_task);
+        assert!(!stored_event.is_schedule_block);
+    }
+
+    #[sqlx::test]
+    async fn reads_only_the_owner_s_task_parent(db_pool: PgPool) {
+        let user_id = seed_user_id(&db_pool, "owner@example.com").await;
+        let other_user_id = seed_user_id(&db_pool, "other@example.com").await;
+        let (task_id, _) = seed_task_ids(&db_pool, user_id).await;
+
+        let owner_parent = PostgresCalendarEventSource
+            .find_task_parent_id(&db_pool, user_id, task_id)
+            .await
+            .expect("the read should run");
+        let other_parent = PostgresCalendarEventSource
+            .find_task_parent_id(&db_pool, other_user_id, task_id)
+            .await
+            .expect("the read should run");
+
+        assert_eq!(owner_parent, Some(None));
+        assert_eq!(other_parent, None);
     }
 
     #[sqlx::test]
@@ -919,6 +1117,7 @@ pub mod tests {
                 &ChangedCalendarEvent {
                     title: String::from("Swim"),
                     category_id: Some(category_id),
+                    task_id: None,
                     starts_at: instant("2026-11-06T18:00:00Z"),
                     ends_at: Some(instant("2026-11-07T19:00:00Z")),
                     finished_at: None,

@@ -8,9 +8,10 @@ use crate::core::json_field::deserialize_present_field;
 use crate::core::state::AppState;
 use crate::features::account::actions::update_time_tracking_settings::UpdateTimeTrackingSettings;
 use crate::features::account::entities::time_tracking_settings::{
-    TimeTrackingChanges, validate_calendar_time_zone, validate_check_in_minutes,
-    validate_clock_time,
+    PlanningWeek, TimeTrackingChanges, validate_calendar_time_zone, validate_check_in_minutes,
+    validate_clock_time, validate_planning_day, validate_planning_week_length,
 };
+use crate::features::account::error::AccountError;
 use crate::features::account::responses::time_tracking_settings_response::TimeTrackingSettingsResponse;
 use crate::features::throttling::entities::write_session::WriteSession;
 
@@ -26,6 +27,31 @@ pub struct PatchTimeTrackingRequest {
     pub tracked_category_id: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_present_field")]
     pub calendar_time_zone: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_present_field")]
+    pub planning_hours: Option<Option<Vec<Option<PlanningDayRequest>>>>,
+}
+
+#[derive(Deserialize)]
+pub struct PlanningDayRequest {
+    pub start: String,
+    pub end: String,
+}
+
+fn validate_planning_week(
+    planning_day_requests: &[Option<PlanningDayRequest>],
+) -> Result<PlanningWeek, AccountError> {
+    validate_planning_week_length(planning_day_requests.len())?;
+    planning_day_requests
+        .iter()
+        .map(|planning_day_request| {
+            planning_day_request
+                .as_ref()
+                .map(|planning_day_request| {
+                    validate_planning_day(&planning_day_request.start, &planning_day_request.end)
+                })
+                .transpose()
+        })
+        .collect()
 }
 
 pub async fn patch_account_time_tracking(
@@ -69,6 +95,16 @@ pub async fn patch_account_time_tracking(
                 calendar_time_zone
                     .as_deref()
                     .map(validate_calendar_time_zone)
+                    .transpose()
+            })
+            .transpose()?,
+        planning_hours_change: patch_request
+            .planning_hours
+            .as_ref()
+            .map(|planning_hours| {
+                planning_hours
+                    .as_deref()
+                    .map(validate_planning_week)
                     .transpose()
             })
             .transpose()?,

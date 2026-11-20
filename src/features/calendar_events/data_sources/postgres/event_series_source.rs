@@ -21,6 +21,7 @@ struct EventSeriesRow {
     repeat_rule: Json<RepeatRule>,
     until_instant_millis: Option<i64>,
     cancelled_start_millis: Vec<i64>,
+    is_schedule_block: bool,
 }
 
 impl TryFrom<EventSeriesRow> for EventSeries {
@@ -47,6 +48,7 @@ impl TryFrom<EventSeriesRow> for EventSeries {
                 .into_iter()
                 .map(UtcInstant::from_unix_millis)
                 .collect(),
+            is_schedule_block: series_row.is_schedule_block,
         })
     }
 }
@@ -119,7 +121,8 @@ impl PostgresEventSeriesSource {
                                  > 'epoch'::timestamptz + $2::bigint * interval '1 millisecond'
                                    - event_series.duration_minutes * interval '1 minute'),
                           '{}'
-                      ) AS "cancelled_start_millis!"
+                      ) AS "cancelled_start_millis!",
+                      event_series.schedule_id IS NOT NULL AS "is_schedule_block!"
                FROM event_series
                WHERE event_series.user_id = $1
                  AND NOT event_series.hidden
@@ -159,7 +162,8 @@ impl PostgresEventSeriesSource {
                            FROM event_exceptions
                            WHERE event_exceptions.series_id = event_series.id),
                           '{}'
-                      ) AS "cancelled_start_millis!"
+                      ) AS "cancelled_start_millis!",
+                      event_series.schedule_id IS NOT NULL AS "is_schedule_block!"
                FROM event_series
                WHERE event_series.id = $2
                  AND event_series.user_id = $1

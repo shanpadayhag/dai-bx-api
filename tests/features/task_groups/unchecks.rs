@@ -19,7 +19,7 @@ fn every_day() -> serde_json::Value {
     json!({ "frequency": "daily", "interval": 1, "ends": { "never": true } })
 }
 
-async fn uncheck_every_midnight(
+pub async fn uncheck_every_midnight(
     db_pool: &PgPool,
     signed_in_person: &SignedInPerson,
     group_tasks: &serde_json::Value,
@@ -38,7 +38,7 @@ async fn uncheck_every_midnight(
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-async fn tick_before_the_last_uncheck(db_pool: &PgPool, task_id: &str) {
+pub async fn tick_before_the_last_uncheck(db_pool: &PgPool, task_id: &str) {
     sqlx::query(
         "UPDATE tasks SET completed_at = now() - interval '2 days' WHERE id = $1::text::uuid",
     )

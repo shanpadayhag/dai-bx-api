@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tasks\n             SET name = coalesce($3, name),\n                 estimate_minutes = CASE WHEN $4 THEN $5 ELSE estimate_minutes END,\n                 priority = coalesce($6, priority),\n                 due_date = CASE WHEN $7 THEN $8::text::date ELSE due_date END,\n                 due_time = CASE WHEN $7 THEN $9::text::time ELSE due_time END,\n                 plan_window_start = CASE WHEN $10 THEN $11::text::time ELSE plan_window_start END,\n                 plan_window_end = CASE WHEN $10 THEN $12::text::time ELSE plan_window_end END,\n                 updated_at = now()\n             WHERE id = $1 AND group_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Int4",
+        "Text",
+        "Bool",
+        "Text",
+        "Text",
+        "Bool",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e3f86a2055f1754761c4d9f2327fab6d95fb9dd2ad2e9591f43f4165055d6b6b"
+}

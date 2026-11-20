@@ -1,7 +1,29 @@
+use serde::{Deserialize, Serialize};
+use sqlx::types::Json;
 use uuid::Uuid;
 
 use crate::core::recurrence::parse_time_zone;
+use crate::core::wall_clock::{WallClockWindow, format_wall_clock_time, parse_wall_clock_time};
 use crate::features::account::error::AccountError;
+
+pub const PLANNING_WEEK_DAY_COUNT: usize = 7;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlanningDay {
+    pub start: String,
+    pub end: String,
+}
+
+impl PlanningDay {
+    pub fn window(&self) -> Option<WallClockWindow> {
+        WallClockWindow::new(
+            parse_wall_clock_time(&self.start)?,
+            parse_wall_clock_time(&self.end)?,
+        )
+    }
+}
+
+pub type PlanningWeek = Vec<Option<PlanningDay>>;
 
 pub const CHECK_IN_MINUTES_RANGE: std::ops::RangeInclusive<i32> = 5..=240;
 
@@ -14,6 +36,7 @@ pub struct TimeTrackingSettings {
     pub working_hours_end: String,
     pub tracked_category_id: Option<Uuid>,
     pub calendar_time_zone: Option<String>,
+    pub planning_hours: Option<Json<PlanningWeek>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -25,6 +48,7 @@ pub struct TimeTrackingChanges {
     pub working_hours_end: Option<String>,
     pub tracked_category_change: Option<Option<Uuid>>,
     pub calendar_time_zone_change: Option<Option<String>>,
+    pub planning_hours_change: Option<Option<PlanningWeek>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,6 +97,33 @@ pub fn validate_clock_time(raw_time: &str) -> Result<String, AccountError> {
         return Err(invalid_time());
     }
     Ok(raw_time.to_owned())
+}
+
+pub fn validate_planning_day(
+    start_text: &str,
+    end_text: &str,
+) -> Result<PlanningDay, AccountError> {
+    let parse_time = |time_text: &str| {
+        parse_wall_clock_time(time_text)
+            .ok_or_else(|| AccountError::Invalid(String::from("a time is written as HH:MM")))
+    };
+    let planning_window = WallClockWindow::new(parse_time(start_text)?, parse_time(end_text)?)
+        .ok_or_else(|| {
+            AccountError::Invalid(String::from("a window starts and ends at different times"))
+        })?;
+    Ok(PlanningDay {
+        start: format_wall_clock_time(planning_window.start),
+        end: format_wall_clock_time(planning_window.end),
+    })
+}
+
+pub fn validate_planning_week_length(day_count: usize) -> Result<(), AccountError> {
+    if day_count == PLANNING_WEEK_DAY_COUNT {
+        return Ok(());
+    }
+    Err(AccountError::Invalid(String::from(
+        "planning hours list seven days, Monday first",
+    )))
 }
 
 #[cfg(test)]

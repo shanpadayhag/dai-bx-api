@@ -323,13 +323,6 @@ async fn refuses_a_planned_event_carrying_tracking_fields(db_pool: PgPool) {
     let owner = seed_owner(&db_pool, "owner@example.com").await;
     let rejected_rows = [
         (
-            "a task",
-            EventRow {
-                task_id: Some(owner.task_id),
-                ..PLANNED_HOUR
-            },
-        ),
-        (
             "a card",
             EventRow {
                 card_id: Some(owner.card_id),

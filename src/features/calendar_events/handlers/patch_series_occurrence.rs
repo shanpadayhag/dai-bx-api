@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::core::error::AppError;
 use crate::core::state::AppState;
 use crate::features::calendar_events::actions::change_series_occurrence::ChangeSeriesOccurrence;
+use crate::features::calendar_events::entities::calendar_event::UNLINKABLE_EVENT_MESSAGE;
 use crate::features::calendar_events::entities::event_series::{
     OccurrenceRequest, OccurrenceScope, parse_occurrence_path,
 };
@@ -29,6 +30,9 @@ pub async fn patch_series_occurrence(
         OccurrenceScope::parse(patch_request.scope.as_deref().unwrap_or_default())?;
     let (series_id, original_start) = parse_occurrence_path(&series_id_text, &original_start_text)?;
     let (event_changes, input_zone) = patch_request.event_changes.into_event_changes()?;
+    if event_changes.new_task_id().is_some() {
+        return Err(AppError::Validation(String::from(UNLINKABLE_EVENT_MESSAGE)));
+    }
     let changed_occurrence = ChangeSeriesOccurrence::new(&app_state.db_pool)
         .execute(
             write_session.user_id,

@@ -1,4 +1,5 @@
 use sqlx::PgExecutor;
+use sqlx::types::Json;
 use uuid::Uuid;
 
 use crate::features::account::entities::account_profile::{
@@ -6,7 +7,7 @@ use crate::features::account::entities::account_profile::{
 };
 use crate::features::account::entities::account_security::AccountSecurity;
 use crate::features::account::entities::time_tracking_settings::{
-    TimeTrackingChanges, TimeTrackingSettings, TimeTrackingWrite,
+    PlanningWeek, TimeTrackingChanges, TimeTrackingSettings, TimeTrackingWrite,
 };
 
 #[derive(Default)]
@@ -45,7 +46,8 @@ impl PostgresAccountSource {
                       to_char(working_hours_start, 'HH24:MI') AS "working_hours_start!",
                       to_char(working_hours_end, 'HH24:MI') AS "working_hours_end!",
                       tracked_category_id,
-                      calendar_time_zone
+                      calendar_time_zone,
+                      planning_hours AS "planning_hours: Json<PlanningWeek>"
                FROM users
                WHERE id = $1"#,
             user_id,
@@ -70,6 +72,7 @@ impl PostgresAccountSource {
                    working_hours_end = coalesce($6::text::time, working_hours_end),
                    tracked_category_id = CASE WHEN $7 THEN $8 ELSE tracked_category_id END,
                    calendar_time_zone = CASE WHEN $9 THEN $10 ELSE calendar_time_zone END,
+                   planning_hours = CASE WHEN $11 THEN $12 ELSE planning_hours END,
                    updated_at = now()
                WHERE id = $1
                RETURNING check_ins_enabled,
@@ -78,7 +81,8 @@ impl PostgresAccountSource {
                          to_char(working_hours_start, 'HH24:MI') AS "working_hours_start!",
                          to_char(working_hours_end, 'HH24:MI') AS "working_hours_end!",
                          tracked_category_id,
-                         calendar_time_zone"#,
+                         calendar_time_zone,
+                         planning_hours AS "planning_hours: Json<PlanningWeek>""#,
             user_id,
             time_tracking_changes.check_ins_enabled,
             time_tracking_changes.check_in_interval_minutes,
@@ -92,6 +96,12 @@ impl PostgresAccountSource {
                 .calendar_time_zone_change
                 .as_ref()
                 .and_then(Option::as_deref),
+            time_tracking_changes.planning_hours_change.is_some(),
+            time_tracking_changes
+                .planning_hours_change
+                .clone()
+                .flatten()
+                .map(Json) as Option<Json<PlanningWeek>>,
         )
         .fetch_optional(executor)
         .await;
@@ -260,6 +270,7 @@ mod tests {
             working_hours_end: String::from("01:30"),
             tracked_category_id: Some(category_id),
             calendar_time_zone: Some(String::from("Europe/London")),
+            planning_hours: None,
         };
         assert_eq!(
             time_tracking_write,

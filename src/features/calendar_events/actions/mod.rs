@@ -1,11 +1,14 @@
 pub mod change_series_occurrence;
 pub mod check_in_running_event;
+pub mod check_linkable_task;
 pub mod close_running_events;
 pub mod create_planned_event;
+pub mod create_task_blocks;
 pub mod cut_off_series;
 pub mod delete_calendar_event;
 pub mod delete_series_occurrence;
 pub mod find_event_task_id;
+pub mod find_linked_task_cutoffs;
 pub mod finish_running_event;
 pub mod list_calendar_events;
 pub mod list_running_items;

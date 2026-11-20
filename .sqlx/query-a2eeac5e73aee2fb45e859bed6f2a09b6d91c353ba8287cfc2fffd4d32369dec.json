@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO calendar_events\n                 (id, user_id, kind, title, category_id, task_id, starts_at, ends_at, time_zone)\n             SELECT task_block.id, $1, 'planned', task_block.title, $2, task_block.task_id,\n                    'epoch'::timestamptz + task_block.starts_millis * interval '1 millisecond',\n                    'epoch'::timestamptz + task_block.ends_millis * interval '1 millisecond',\n                    $3\n             FROM unnest($4::uuid[], $5::text[], $6::uuid[], $7::bigint[], $8::bigint[])\n                  AS task_block(id, title, task_id, starts_millis, ends_millis)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "UuidArray",
+        "TextArray",
+        "UuidArray",
+        "Int8Array",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a2eeac5e73aee2fb45e859bed6f2a09b6d91c353ba8287cfc2fffd4d32369dec"
+}

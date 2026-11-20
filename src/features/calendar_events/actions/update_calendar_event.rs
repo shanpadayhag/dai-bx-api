@@ -2,6 +2,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::core::utc_instant::UtcInstant;
+use crate::features::calendar_events::actions::check_linkable_task::CheckLinkableTask;
 use crate::features::calendar_events::data_sources::postgres::calendar_event_source::PostgresCalendarEventSource;
 use crate::features::calendar_events::data_sources::postgres::event_series_source::PostgresEventSeriesSource;
 use crate::features::calendar_events::entities::calendar_event::{
@@ -12,6 +13,7 @@ use crate::features::calendar_events::error::CalendarEventError;
 
 pub struct UpdateCalendarEvent<'a> {
     db_pool: &'a PgPool,
+    check_linkable_task: CheckLinkableTask,
     postgres_calendar_event_source: PostgresCalendarEventSource,
     postgres_event_series_source: PostgresEventSeriesSource,
 }
@@ -20,6 +22,7 @@ impl<'a> UpdateCalendarEvent<'a> {
     pub fn new(db_pool: &'a PgPool) -> Self {
         Self {
             db_pool,
+            check_linkable_task: CheckLinkableTask::new(),
             postgres_calendar_event_source: PostgresCalendarEventSource,
             postgres_event_series_source: PostgresEventSeriesSource,
         }
@@ -39,6 +42,11 @@ impl<'a> UpdateCalendarEvent<'a> {
             .filter(|current_event| current_event.series.is_none())
             .ok_or(CalendarEventError::NotFound)?;
         let changed_event = current_event.apply_changes(event_changes, UtcInstant::now())?;
+        if let Some(task_id) = event_changes.new_task_id() {
+            self.check_linkable_task
+                .execute(&mut *update_transaction, user_id, task_id)
+                .await?;
+        }
         let updated_event = match event_changes.new_repeat() {
             Some(event_repeat) => {
                 self.turn_into_series(

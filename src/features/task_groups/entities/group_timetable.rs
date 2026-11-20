@@ -1,7 +1,9 @@
 use jiff::civil::{Date, Time};
 use jiff::tz::TimeZone;
 
-use crate::core::recurrence::{RepeatRule, latest_at_or_before, next_after, to_instant, to_local};
+use crate::core::recurrence::{
+    RepeatRule, latest_at_or_before, next_after, occurrences, to_instant, to_local,
+};
 use crate::core::utc_instant::UtcInstant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +51,28 @@ impl ShowRule {
             None => (span_start_date.tomorrow().ok()?, Time::midnight()),
         };
         to_instant(end_date.to_datetime(end_time), time_zone)
+    }
+
+    pub fn spans_between(
+        &self,
+        range_start: UtcInstant,
+        range_end: UtcInstant,
+        time_zone: &TimeZone,
+    ) -> Vec<(UtcInstant, UtcInstant)> {
+        occurrences(
+            &self.repeat_rule,
+            self.start_date.to_datetime(self.span_start_time()),
+            time_zone,
+            range_start.plus_days(-2),
+            range_end,
+        )
+        .into_iter()
+        .filter_map(|span_start| {
+            self.span_end_after(span_start, time_zone)
+                .map(|span_end| (span_start, span_end))
+        })
+        .filter(|(_, span_end)| *span_end > range_start)
+        .collect()
     }
 }
 
@@ -332,5 +356,49 @@ mod tests {
             Some(instant_at("2026-11-05T00:00", &manila()))
         );
         assert_eq!(group_timetable.next_uncheck_at, None);
+    }
+
+    #[test]
+    fn lists_the_show_spans_that_touch_a_range() {
+        let weekend_rule = show_rule(weekends(), None);
+        let night_rule = show_rule(every_day(), Some((time(22, 0, 0, 0), time(2, 0, 0, 0))));
+
+        let weekend_spans = weekend_rule.spans_between(
+            instant_at("2026-11-20T12:00", &manila()),
+            instant_at("2026-11-27T00:00", &manila()),
+            &manila(),
+        );
+        let night_spans = night_rule.spans_between(
+            instant_at("2026-11-21T01:00", &manila()),
+            instant_at("2026-11-21T23:00", &manila()),
+            &manila(),
+        );
+
+        assert_eq!(
+            weekend_spans,
+            vec![
+                (
+                    instant_at("2026-11-21T00:00", &manila()),
+                    instant_at("2026-11-22T00:00", &manila())
+                ),
+                (
+                    instant_at("2026-11-22T00:00", &manila()),
+                    instant_at("2026-11-23T00:00", &manila())
+                ),
+            ]
+        );
+        assert_eq!(
+            night_spans,
+            vec![
+                (
+                    instant_at("2026-11-20T22:00", &manila()),
+                    instant_at("2026-11-21T02:00", &manila())
+                ),
+                (
+                    instant_at("2026-11-21T22:00", &manila()),
+                    instant_at("2026-11-22T02:00", &manila())
+                ),
+            ]
+        );
     }
 }

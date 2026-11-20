@@ -1,5 +1,6 @@
 use crate::core::error::AppError;
 use crate::features::card_schedules::error::ScheduleError;
+use crate::features::task_groups::error::TaskGroupError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CalendarEventError {
@@ -34,6 +35,20 @@ impl From<ScheduleError> for CalendarEventError {
             ScheduleError::Invalid(invalid_message) => CalendarEventError::Invalid(invalid_message),
             ScheduleError::NotFound => CalendarEventError::NotFound,
             ScheduleError::Database(database_error) => CalendarEventError::Database(database_error),
+        }
+    }
+}
+
+impl From<TaskGroupError> for CalendarEventError {
+    fn from(task_group_error: TaskGroupError) -> Self {
+        match task_group_error {
+            TaskGroupError::Invalid(invalid_message) => {
+                CalendarEventError::Invalid(invalid_message)
+            }
+            TaskGroupError::NotFound => CalendarEventError::NotFound,
+            TaskGroupError::Database(database_error) => {
+                CalendarEventError::Database(database_error)
+            }
         }
     }
 }

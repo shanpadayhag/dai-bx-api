@@ -18,7 +18,7 @@ use crate::core::middlewares::response_headers::add_response_headers;
 use crate::core::state::AppState;
 use crate::features::{
     account, auth, board_lists, board_properties, boards, calendar_events, card_schedules, cards,
-    categories, health, task_groups, tasks, tracking,
+    categories, health, planning, task_groups, tasks, tracking,
 };
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -50,6 +50,7 @@ pub fn app(app_state: AppState) -> Router {
         .nest("/calendar", calendar_events::router::router())
         .nest("/categories", categories::router::router())
         .nest("/health", health::router::router())
+        .nest("/plans", planning::router::router())
         .nest("/task-groups", task_groups::router::router())
         .merge(board_lists::router::router())
         .merge(board_properties::router::router())

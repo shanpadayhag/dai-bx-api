@@ -6,14 +6,17 @@ use uuid::Uuid;
 use crate::core::error::AppError;
 use crate::core::json_field::deserialize_present_field;
 use crate::core::recurrence::RepeatRule;
+use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::state::AppState;
 use crate::core::utc_instant::UtcInstant;
+use crate::features::calendar_events::actions::find_linked_task_cutoffs::FindLinkedTaskCutoffs;
 use crate::features::calendar_events::actions::update_calendar_event::UpdateCalendarEvent;
 use crate::features::calendar_events::entities::calendar_event::{
     CalendarEventChanges, EventRepeat, NamedTimeZone, parse_event_moment, parse_event_zone,
     validate_planned_title,
 };
 use crate::features::calendar_events::error::CalendarEventError;
+use crate::features::calendar_events::handlers::post_calendar_events::parse_task_id;
 use crate::features::calendar_events::responses::calendar_event_response::CalendarEventResponse;
 use crate::features::throttling::entities::write_session::WriteSession;
 
@@ -33,6 +36,8 @@ pub struct PatchCalendarEventRequest {
     pub time_zone: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_present_field")]
     pub repeat: Option<Option<RepeatRule>>,
+    #[serde(default, deserialize_with = "deserialize_present_field")]
+    pub task_id: Option<Option<String>>,
 }
 
 fn require_input_zone(
@@ -113,6 +118,10 @@ impl PatchCalendarEventRequest {
                         .transpose()
                 })
                 .transpose()?,
+            task_change: self
+                .task_id
+                .map(|task_id| task_id.as_deref().map(parse_task_id).transpose())
+                .transpose()?,
         };
         Ok((event_changes, input_zone))
     }
@@ -121,6 +130,7 @@ impl PatchCalendarEventRequest {
 pub async fn patch_calendar_event(
     State(app_state): State<AppState>,
     write_session: WriteSession,
+    request_time_zone: RequestTimeZone,
     Path(event_id_text): Path<String>,
     Json(patch_request): Json<PatchCalendarEventRequest>,
 ) -> Result<Json<CalendarEventResponse>, AppError> {
@@ -129,5 +139,16 @@ pub async fn patch_calendar_event(
     let updated_event = UpdateCalendarEvent::new(&app_state.db_pool)
         .execute(write_session.user_id, event_id, &event_changes)
         .await?;
-    Ok(Json(updated_event.into()))
+    let uncheck_cutoffs = FindLinkedTaskCutoffs::new(&app_state.db_pool)
+        .execute(
+            write_session.user_id,
+            [&updated_event],
+            &request_time_zone,
+            UtcInstant::now(),
+        )
+        .await?;
+    Ok(Json(CalendarEventResponse::new(
+        updated_event,
+        &uncheck_cutoffs,
+    )))
 }

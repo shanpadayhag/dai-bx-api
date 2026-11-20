@@ -78,6 +78,7 @@ pub struct EventSeries {
     pub repeat_rule: RepeatRule,
     pub until_instant: Option<UtcInstant>,
     pub cancelled_starts: Vec<UtcInstant>,
+    pub is_schedule_block: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,6 +141,7 @@ impl NewEventSeries {
             repeat_rule: self.repeat_rule,
             until_instant: self.until_instant,
             cancelled_starts: Vec::new(),
+            is_schedule_block: false,
         }
     }
 }
@@ -296,6 +298,7 @@ impl EventSeries {
             }),
             until_instant: self.until_instant,
             cancelled_starts: Vec::new(),
+            is_schedule_block: self.is_schedule_block,
         };
         reshaped_series
             .first_occurrence()
@@ -340,6 +343,8 @@ impl EventSeries {
                 original_start: occurrence_start,
                 repeat_rule: self.repeat_rule.clone(),
             }),
+            linked_task: None,
+            is_schedule_block: self.is_schedule_block,
         }
     }
 }
@@ -367,6 +372,7 @@ mod tests {
             .expect("a valid rule"),
             until_instant: None,
             cancelled_starts: Vec::new(),
+            is_schedule_block: false,
         }
     }
 
@@ -486,6 +492,7 @@ mod tests {
         ChangedCalendarEvent {
             title: String::from("Gym"),
             category_id: None,
+            task_id: None,
             starts_at: instant(starts_at),
             ends_at: Some(instant(ends_at)),
             finished_at: None,

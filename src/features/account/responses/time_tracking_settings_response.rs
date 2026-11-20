@@ -1,6 +1,8 @@
 use serde::Serialize;
 
-use crate::features::account::entities::time_tracking_settings::TimeTrackingSettings;
+use crate::features::account::entities::time_tracking_settings::{
+    PlanningDay, TimeTrackingSettings,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -12,6 +14,22 @@ pub struct TimeTrackingSettingsResponse {
     pub working_hours_end: String,
     pub tracked_category_id: Option<String>,
     pub calendar_time_zone: Option<String>,
+    pub planning_hours: Option<Vec<Option<PlanningDayResponse>>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlanningDayResponse {
+    pub start: String,
+    pub end: String,
+}
+
+impl From<PlanningDay> for PlanningDayResponse {
+    fn from(planning_day: PlanningDay) -> Self {
+        Self {
+            start: planning_day.start,
+            end: planning_day.end,
+        }
+    }
 }
 
 impl From<TimeTrackingSettings> for TimeTrackingSettingsResponse {
@@ -26,6 +44,13 @@ impl From<TimeTrackingSettings> for TimeTrackingSettingsResponse {
                 .tracked_category_id
                 .map(|tracked_category_id| tracked_category_id.to_string()),
             calendar_time_zone: time_tracking_settings.calendar_time_zone,
+            planning_hours: time_tracking_settings.planning_hours.map(|planning_week| {
+                planning_week
+                    .0
+                    .into_iter()
+                    .map(|planning_day| planning_day.map(PlanningDayResponse::from))
+                    .collect()
+            }),
         }
     }
 }

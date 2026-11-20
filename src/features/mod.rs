@@ -14,6 +14,7 @@ pub mod health;
 pub mod invites;
 pub mod known_browsers;
 pub mod password_policy;
+pub mod planning;
 pub mod recovery_codes;
 pub mod remembered_devices;
 pub mod security_log;

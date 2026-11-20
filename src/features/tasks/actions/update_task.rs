@@ -44,6 +44,18 @@ impl<'a> UpdateTask<'a> {
             .lock_group_of_task
             .execute(&mut update_transaction, user_id, task_id)
             .await?;
+        if task_changes.touches_planning() {
+            let task_place = self
+                .postgres_task_source
+                .find_place(&mut *update_transaction, task_group_details.id, task_id)
+                .await?
+                .ok_or(TaskError::NotFound)?;
+            if task_place.parent_id.is_some() {
+                return Err(TaskError::Invalid(String::from(
+                    "only a top-level task has a priority, a due date or a window",
+                )));
+            }
+        }
         if !self
             .postgres_task_source
             .update(
