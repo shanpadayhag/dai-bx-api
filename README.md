@@ -157,8 +157,8 @@ curl http://localhost:9000/health
 | POST | `/account/recovery-codes` | `{"password","code"}` → `200 {"recoveryCodes":[…10]}`; every earlier code stops working |
 | POST | `/account/authenticator` | `{"password","code"}` (a recovery code works) → `200 {"next":"set_up_authenticator"}` and a challenge cookie for `GET /auth/mfa/setup` |
 | POST | `/account/authenticator/confirm` | `{"code"}` from the new app → `200 {"status":"authenticator_replaced"}`; ends the other sessions and every remembered device |
-| GET | `/account/time-tracking` | with a session → `200 {"checkInsEnabled","checkInIntervalMinutes","firstCheckInMinutes","workingHoursStart","workingHoursEnd","trackedCategoryId","calendarTimeZone"}`; `calendarTimeZone` is `null` while the calendar follows the device |
-| PATCH | `/account/time-tracking` | any of those fields → `200` with the saved settings; `"calendarTimeZone": null` goes back to the device zone; `422` for check-ins outside 5–240 minutes, a time not like `09:30` or an unknown time zone; `404` for an unknown category |
+| GET | `/account/time-tracking` | with a session → `200 {"checkInsEnabled","checkInIntervalMinutes","firstCheckInMinutes","workingHoursStart","workingHoursEnd","trackedCategoryId","calendarTimeZone","planningHours"}`; `calendarTimeZone` is `null` while the calendar follows the device, and `planningHours` is `null` while planning follows working hours, otherwise seven days, Monday first, each `null` (off) or `{"start","end"}` |
+| PATCH | `/account/time-tracking` | any of those fields → `200` with the saved settings; `"calendarTimeZone": null` goes back to the device zone and `"planningHours": null` back to working hours; `422` for check-ins outside 5–240 minutes, a time not like `09:30` or an unknown time zone; `404` for an unknown category |
 | POST | `/account/delete` | `{"password","code","confirmation":"delete my account"}` → `200 {"status":"account_deleted"}`; deletes everything the account owns |
 | POST | `/account/email/confirm` | `{"token"}`, no session needed → `200 {"status":"email_changed"}`; `422` for a used or expired link |
 
@@ -230,7 +230,7 @@ cargo sqlx prepare -- --all-targets
 - [x] Card triggers, move history, idle cards and the card archive
 - [x] Group schedules and repeat follow-ups
 - [x] Security catch-up: sign-in alerts, email limits and an ASVS Level 2 check of everything live
-- [ ] Automatic scheduling
+- [x] Automatic scheduling: task priority, due dates and plan-between windows, planning hours, plans proposed and accepted, and planned events linked to tasks
 
 See the [open issues](https://github.com/shanpadayhag/dai-bx-api/issues) for a full list of proposed features and known issues.
 
