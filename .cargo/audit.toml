@@ -4,4 +4,13 @@ ignore = [
     # DaiBX does not enable that driver, so the crate is never compiled (`cargo tree -i libsqlite3-sys` is empty).
     # sqlx 0.9.0 still requires the affected version. Review by 2027-02-18.
     "RUSTSEC-2026-0459",
+    # rsa is compiled only because web-push-native turns on jwt-simple's pure-rust feature.
+    # DaiBX signs VAPID tokens with ES256 and never makes, loads or uses an RSA key.
+    # No patched 0.9 release exists. Review by 2027-02-22.
+    "RUSTSEC-2023-0071",
+    # crypto-bigint 0.5 comes from p256 0.13, which web-push-native pins for its ECDH and ES256.
+    # The only long-lived key it handles is the VAPID key, which signs a token only from the
+    # scheduler and the throttled test push, and alone cannot send anyone a notification.
+    # Upgrade when web-push-native moves to p256 0.14. Review by 2027-02-22.
+    "RUSTSEC-2026-0387",
 ]
