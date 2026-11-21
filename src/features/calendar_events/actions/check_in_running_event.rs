@@ -1,6 +1,8 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::features::activity::actions::record_activity::RecordActivity;
+use crate::features::activity::entities::activity_entry::{ActivityDetails, NewActivityEntry};
 use crate::features::calendar_events::data_sources::postgres::calendar_event_source::PostgresCalendarEventSource;
 use crate::features::calendar_events::entities::calendar_event::RunningItem;
 use crate::features::calendar_events::error::CalendarEventError;
@@ -8,6 +10,7 @@ use crate::features::calendar_events::error::CalendarEventError;
 pub struct CheckInRunningEvent<'a> {
     db_pool: &'a PgPool,
     postgres_calendar_event_source: PostgresCalendarEventSource,
+    record_activity: RecordActivity,
 }
 
 impl<'a> CheckInRunningEvent<'a> {
@@ -15,6 +18,7 @@ impl<'a> CheckInRunningEvent<'a> {
         Self {
             db_pool,
             postgres_calendar_event_source: PostgresCalendarEventSource,
+            record_activity: RecordActivity::new(),
         }
     }
 
@@ -42,6 +46,25 @@ impl<'a> CheckInRunningEvent<'a> {
             .find_running_item(&mut *check_in_transaction, user_id, event_id)
             .await?
             .ok_or(CalendarEventError::NotFound)?;
+        if let (Some((activity_subject, tracked_subject)), Some(answered_at)) = (
+            checked_in_item.event.activity_subject(),
+            checked_in_item.event.last_answered_at,
+        ) {
+            self.record_activity
+                .execute(
+                    &mut *check_in_transaction,
+                    NewActivityEntry {
+                        user_id,
+                        occurred_at: answered_at,
+                        subject: activity_subject,
+                        details: ActivityDetails::CheckedIn {
+                            subject: tracked_subject,
+                            event_id: event_id.to_string(),
+                        },
+                    },
+                )
+                .await?;
+        }
         check_in_transaction.commit().await?;
         Ok(checked_in_item)
     }

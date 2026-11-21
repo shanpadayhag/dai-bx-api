@@ -4,7 +4,12 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::core::request_time_zone::RequestTimeZone;
+use crate::core::utc_instant::UtcInstant;
 use crate::features::account::actions::find_time_tracking_settings::FindTimeTrackingSettings;
+use crate::features::activity::actions::record_activity::RecordActivity;
+use crate::features::activity::entities::activity_entry::{
+    ActivityDetails, ActivitySubject, NewActivityEntry,
+};
 use crate::features::calendar_events::actions::create_task_blocks::{
     CreateTaskBlocks, TaskBlockPlacement,
 };
@@ -19,6 +24,7 @@ pub struct AcceptPlan<'a> {
     find_time_tracking_settings: FindTimeTrackingSettings,
     postgres_planning_source: PostgresPlanningSource,
     create_task_blocks: CreateTaskBlocks,
+    record_activity: RecordActivity,
 }
 
 impl<'a> AcceptPlan<'a> {
@@ -28,6 +34,7 @@ impl<'a> AcceptPlan<'a> {
             find_time_tracking_settings: FindTimeTrackingSettings::new(),
             postgres_planning_source: PostgresPlanningSource,
             create_task_blocks: CreateTaskBlocks::new(),
+            record_activity: RecordActivity::new(),
         }
     }
 
@@ -36,6 +43,7 @@ impl<'a> AcceptPlan<'a> {
         user_id: Uuid,
         accepted_blocks: &[PlanBlock],
         request_time_zone: &RequestTimeZone,
+        now: UtcInstant,
     ) -> Result<Vec<CalendarEvent>, PlanningError> {
         let mut accept_transaction = self.db_pool.begin().await?;
         let time_tracking_settings = self
@@ -91,6 +99,19 @@ impl<'a> AcceptPlan<'a> {
                         .or(request_zone_name),
                 },
                 &task_blocks,
+            )
+            .await?;
+        self.record_activity
+            .execute(
+                &mut *accept_transaction,
+                NewActivityEntry {
+                    user_id,
+                    occurred_at: now,
+                    subject: ActivitySubject::Nothing,
+                    details: ActivityDetails::PlanAccepted {
+                        block_count: created_events.len() as i64,
+                    },
+                },
             )
             .await?;
         accept_transaction.commit().await?;

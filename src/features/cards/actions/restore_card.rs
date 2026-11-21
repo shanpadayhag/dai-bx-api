@@ -7,7 +7,7 @@ use crate::features::boards::actions::build_board::BuildBoard;
 use crate::features::boards::entities::board::Board;
 use crate::features::card_schedules::actions::resume_schedules_of_restored_card::ResumeSchedulesOfRestoredCard;
 use crate::features::cards::actions::lock_board_of_card::LockBoardOfCard;
-use crate::features::cards::data_sources::postgres::card_move_source::PostgresCardMoveSource;
+use crate::features::cards::actions::record_card_move::RecordCardMove;
 use crate::features::cards::data_sources::postgres::card_source::PostgresCardSource;
 use crate::features::cards::entities::card_move::{CardMoveReason, MoveCause, NewCardMove};
 use crate::features::cards::error::CardError;
@@ -18,7 +18,7 @@ pub struct RestoreCard<'a> {
     resume_schedules_of_restored_card: ResumeSchedulesOfRestoredCard,
     build_board: BuildBoard,
     postgres_card_source: PostgresCardSource,
-    postgres_card_move_source: PostgresCardMoveSource,
+    record_card_move: RecordCardMove,
 }
 
 impl<'a> RestoreCard<'a> {
@@ -29,7 +29,7 @@ impl<'a> RestoreCard<'a> {
             resume_schedules_of_restored_card: ResumeSchedulesOfRestoredCard::new(),
             build_board: BuildBoard::new(),
             postgres_card_source: PostgresCardSource,
-            postgres_card_move_source: PostgresCardMoveSource,
+            record_card_move: RecordCardMove::new(),
         }
     }
 
@@ -61,9 +61,9 @@ impl<'a> RestoreCard<'a> {
         self.postgres_card_source
             .put_back_on_top(&mut *restore_transaction, card_id, restored_list_id)
             .await?;
-        self.postgres_card_move_source
-            .record(
-                &mut *restore_transaction,
+        self.record_card_move
+            .execute(
+                &mut restore_transaction,
                 &NewCardMove {
                     card_id,
                     from_list_id: None,

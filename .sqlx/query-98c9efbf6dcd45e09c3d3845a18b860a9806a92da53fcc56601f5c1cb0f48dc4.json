@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO activity_entries\n                 (id, user_id, occurred_at, kind, task_id, card_id, title, context_name, details)\n             VALUES (\n                 $1,\n                 $2,\n                 'epoch'::timestamptz + $3::bigint * interval '1 millisecond',\n                 $4,\n                 $5,\n                 $6,\n                 CASE\n                     WHEN $5::uuid IS NOT NULL THEN\n                         (SELECT name FROM tasks WHERE id = $5 AND user_id = $2)\n                     WHEN $6::uuid IS NOT NULL THEN\n                         (SELECT title FROM cards WHERE id = $6 AND user_id = $2)\n                 END,\n                 CASE\n                     WHEN $5::uuid IS NOT NULL THEN\n                         (SELECT task_groups.name\n                          FROM tasks JOIN task_groups ON task_groups.id = tasks.group_id\n                          WHERE tasks.id = $5 AND tasks.user_id = $2)\n                     WHEN $6::uuid IS NOT NULL THEN\n                         (SELECT boards.name\n                          FROM cards JOIN boards ON boards.id = cards.board_id\n                          WHERE cards.id = $6 AND cards.user_id = $2)\n                 END,\n                 $7\n             )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "98c9efbf6dcd45e09c3d3845a18b860a9806a92da53fcc56601f5c1cb0f48dc4"
+}

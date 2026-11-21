@@ -2,6 +2,7 @@ use uuid::Uuid;
 
 use crate::core::utc_instant::UtcInstant;
 use crate::features::planning::entities::planning_inputs::{TimeSpan, align_to_quarter_hour};
+use crate::features::planning::entities::planning_order::PlanningOrder;
 use crate::features::tasks::entities::task::TaskPriority;
 
 pub const CANDIDATE_LIMIT: usize = 500;
@@ -30,20 +31,15 @@ impl PlanCandidate {
         )
     }
 
-    fn plan_order_key(
-        &self,
-    ) -> (
-        bool,
-        Option<UtcInstant>,
-        TaskPriority,
-        (UtcInstant, Uuid, i32, Uuid),
-    ) {
-        (
-            self.due.is_none(),
-            self.due,
-            self.priority,
-            self.group_order_key(),
-        )
+    fn plan_order_key(&self) -> PlanningOrder {
+        PlanningOrder {
+            due: self.due,
+            priority: self.priority,
+            group_created_at: self.group_created_at,
+            group_id: self.group_id,
+            position: self.position,
+            task_id: self.task_id,
+        }
     }
 }
 

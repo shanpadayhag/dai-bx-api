@@ -1,4 +1,5 @@
 pub mod account;
+pub mod activity;
 pub mod auth;
 pub mod auth_challenges;
 pub mod board_lists;
@@ -23,5 +24,6 @@ pub mod sign_in_alerts;
 pub mod task_groups;
 pub mod tasks;
 pub mod throttling;
+pub mod today;
 pub mod tracking;
 pub mod users;

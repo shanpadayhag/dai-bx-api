@@ -2,7 +2,9 @@ use sqlx::PgExecutor;
 use uuid::Uuid;
 
 use crate::core::utc_instant::UtcInstant;
-use crate::features::cards::entities::card_move::{CardMove, CardMoveReason, NewCardMove};
+use crate::features::cards::entities::card_move::{
+    CardMove, CardMoveReason, NewCardMove, RecordedCardMove,
+};
 
 #[derive(Default)]
 pub struct PostgresCardMoveSource;
@@ -12,8 +14,8 @@ impl PostgresCardMoveSource {
         &self,
         executor: impl PgExecutor<'_>,
         new_card_move: &NewCardMove<'_>,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query!(
+    ) -> Result<Option<RecordedCardMove>, sqlx::Error> {
+        let recorded_row = sqlx::query!(
             "WITH moved_card AS (
                  UPDATE cards
                  SET last_moved_at = 'epoch'::timestamptz + $5::bigint * interval '1 millisecond'
@@ -30,7 +32,8 @@ impl PostgresCardMoveSource {
                     (SELECT name FROM board_lists WHERE id = $4),
                     $6,
                     $7
-             FROM moved_card",
+             FROM moved_card
+             RETURNING user_id, from_list_name, to_list_name",
             Uuid::now_v7(),
             new_card_move.card_id,
             new_card_move.from_list_id,
@@ -39,9 +42,13 @@ impl PostgresCardMoveSource {
             new_card_move.cause.reason.as_str(),
             new_card_move.cause.task_title.as_deref(),
         )
-        .execute(executor)
+        .fetch_optional(executor)
         .await?;
-        Ok(())
+        Ok(recorded_row.map(|recorded_row| RecordedCardMove {
+            user_id: recorded_row.user_id,
+            from_list_name: recorded_row.from_list_name,
+            to_list_name: recorded_row.to_list_name,
+        }))
     }
 
     pub async fn list_for_card(

@@ -6,7 +6,7 @@ use crate::core::utc_instant::UtcInstant;
 use crate::features::boards::actions::build_board::BuildBoard;
 use crate::features::boards::entities::board::Board;
 use crate::features::cards::actions::lock_board_of_card::LockBoardOfCard;
-use crate::features::cards::data_sources::postgres::card_move_source::PostgresCardMoveSource;
+use crate::features::cards::actions::record_card_move::RecordCardMove;
 use crate::features::cards::data_sources::postgres::card_source::PostgresCardSource;
 use crate::features::cards::entities::card::CardPlace;
 use crate::features::cards::entities::card_move::{CardMoveReason, MoveCause, NewCardMove};
@@ -17,7 +17,7 @@ pub struct MoveCard<'a> {
     lock_board_of_card: LockBoardOfCard,
     build_board: BuildBoard,
     postgres_card_source: PostgresCardSource,
-    postgres_card_move_source: PostgresCardMoveSource,
+    record_card_move: RecordCardMove,
 }
 
 impl<'a> MoveCard<'a> {
@@ -27,7 +27,7 @@ impl<'a> MoveCard<'a> {
             lock_board_of_card: LockBoardOfCard::new(),
             build_board: BuildBoard::new(),
             postgres_card_source: PostgresCardSource,
-            postgres_card_move_source: PostgresCardMoveSource,
+            record_card_move: RecordCardMove::new(),
         }
     }
 
@@ -85,9 +85,9 @@ impl<'a> MoveCard<'a> {
             true
         };
         if is_moved {
-            self.postgres_card_move_source
-                .record(
-                    &mut *move_transaction,
+            self.record_card_move
+                .execute(
+                    &mut move_transaction,
                     &NewCardMove {
                         card_id,
                         from_list_id: Some(current_place.list_id),

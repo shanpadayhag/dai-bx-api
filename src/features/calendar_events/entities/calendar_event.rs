@@ -6,6 +6,9 @@ use crate::core::recurrence::{
     RepeatRule, parse_calendar_date, parse_local_moment, parse_time_zone, to_instant,
 };
 use crate::core::utc_instant::UtcInstant;
+use crate::features::activity::entities::activity_entry::{
+    ActivitySubject, TrackedSubject as ActivityTrackedSubject,
+};
 use crate::features::calendar_events::error::CalendarEventError;
 use crate::features::card_schedules::entities::card_schedule::ScheduledMove;
 
@@ -230,6 +233,18 @@ impl CalendarEvent {
         match self.source {
             Some(CalendarEventSource::Task { task_id, .. }) => Some(task_id),
             _ => None,
+        }
+    }
+
+    pub fn activity_subject(&self) -> Option<(ActivitySubject, ActivityTrackedSubject)> {
+        match self.source {
+            Some(CalendarEventSource::Task { task_id, .. }) => {
+                Some((ActivitySubject::Task(task_id), ActivityTrackedSubject::Task))
+            }
+            Some(CalendarEventSource::Card { card_id, .. }) => {
+                Some((ActivitySubject::Card(card_id), ActivityTrackedSubject::Card))
+            }
+            None => None,
         }
     }
 

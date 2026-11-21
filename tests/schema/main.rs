@@ -1,4 +1,5 @@
 mod account_deletion_cascade;
+mod activity_schema;
 mod app_database_role;
 mod board_schema;
 mod calendar_schema;

@@ -17,8 +17,8 @@ use crate::core::middlewares::refusal_log::log_refused_request;
 use crate::core::middlewares::response_headers::add_response_headers;
 use crate::core::state::AppState;
 use crate::features::{
-    account, auth, board_lists, board_properties, boards, calendar_events, card_schedules, cards,
-    categories, health, planning, task_groups, tasks, tracking,
+    account, activity, auth, board_lists, board_properties, boards, calendar_events,
+    card_schedules, cards, categories, health, planning, task_groups, tasks, today, tracking,
 };
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -45,6 +45,7 @@ pub fn app(app_state: AppState) -> Router {
 
     Router::new()
         .nest("/account", account::router::router())
+        .nest("/activity", activity::router::router())
         .nest("/auth", auth::router::router())
         .nest("/boards", boards::router::router())
         .nest("/calendar", calendar_events::router::router())
@@ -52,6 +53,7 @@ pub fn app(app_state: AppState) -> Router {
         .nest("/health", health::router::router())
         .nest("/plans", planning::router::router())
         .nest("/task-groups", task_groups::router::router())
+        .nest("/today", today::router::router())
         .merge(board_lists::router::router())
         .merge(board_properties::router::router())
         .merge(card_schedules::router::router())

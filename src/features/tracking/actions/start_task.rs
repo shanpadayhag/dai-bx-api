@@ -3,6 +3,10 @@ use uuid::Uuid;
 
 use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
+use crate::features::activity::actions::record_activity::RecordActivity;
+use crate::features::activity::entities::activity_entry::{
+    ActivityDetails, ActivitySubject, NewActivityEntry, TrackedSubject as ActivityTrackedSubject,
+};
 use crate::features::calendar_events::actions::open_running_event::OpenRunningEvent;
 use crate::features::calendar_events::entities::calendar_event::{
     NewRunningEvent, RunningItem, TrackedSubject,
@@ -18,6 +22,7 @@ pub struct StartTask<'a> {
     lock_group_of_task: LockGroupOfTask,
     find_trackable_task: FindTrackableTask,
     open_running_event: OpenRunningEvent,
+    record_activity: RecordActivity,
     fire_card_trigger: FireCardTrigger,
 }
 
@@ -28,6 +33,7 @@ impl<'a> StartTask<'a> {
             lock_group_of_task: LockGroupOfTask::new(),
             find_trackable_task: FindTrackableTask::new(),
             open_running_event: OpenRunningEvent::new(),
+            record_activity: RecordActivity::new(),
             fire_card_trigger: FireCardTrigger::new(),
         }
     }
@@ -67,6 +73,20 @@ impl<'a> StartTask<'a> {
                     user_id,
                     title: trackable_task.name.clone(),
                     subject: TrackedSubject::Task(task_id),
+                },
+            )
+            .await?;
+        self.record_activity
+            .execute(
+                &mut *start_transaction,
+                NewActivityEntry {
+                    user_id,
+                    occurred_at: now,
+                    subject: ActivitySubject::Task(task_id),
+                    details: ActivityDetails::Started {
+                        subject: ActivityTrackedSubject::Task,
+                        event_id: running_item.event.id.to_string(),
+                    },
                 },
             )
             .await?;

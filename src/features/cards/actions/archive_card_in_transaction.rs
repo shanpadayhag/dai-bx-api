@@ -2,7 +2,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::features::card_schedules::actions::pause_schedules_of_archived_card::PauseSchedulesOfArchivedCard;
-use crate::features::cards::data_sources::postgres::card_move_source::PostgresCardMoveSource;
+use crate::features::cards::actions::record_card_move::RecordCardMove;
 use crate::features::cards::data_sources::postgres::card_source::PostgresCardSource;
 use crate::features::cards::entities::card_archive::CardArchive;
 use crate::features::cards::entities::card_move::{MoveCause, NewCardMove};
@@ -12,7 +12,7 @@ use crate::features::cards::error::CardError;
 pub struct ArchiveCardInTransaction {
     pause_schedules_of_archived_card: PauseSchedulesOfArchivedCard,
     postgres_card_source: PostgresCardSource,
-    postgres_card_move_source: PostgresCardMoveSource,
+    record_card_move: RecordCardMove,
 }
 
 impl ArchiveCardInTransaction {
@@ -20,7 +20,7 @@ impl ArchiveCardInTransaction {
         Self {
             pause_schedules_of_archived_card: PauseSchedulesOfArchivedCard::new(),
             postgres_card_source: PostgresCardSource,
-            postgres_card_move_source: PostgresCardMoveSource,
+            record_card_move: RecordCardMove::new(),
         }
     }
 
@@ -36,8 +36,8 @@ impl ArchiveCardInTransaction {
             .find_place(&mut *connection, board_id, card_id)
             .await?
             .ok_or_else(|| CardError::Conflict(String::from("This card is already archived.")))?;
-        self.postgres_card_move_source
-            .record(
+        self.record_card_move
+            .execute(
                 &mut *connection,
                 &NewCardMove {
                     card_id,

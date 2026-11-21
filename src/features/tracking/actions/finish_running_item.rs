@@ -3,6 +3,8 @@ use uuid::Uuid;
 
 use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
+use crate::features::activity::actions::record_activity::RecordActivity;
+use crate::features::activity::entities::activity_entry::{ActivityDetails, NewActivityEntry};
 use crate::features::calendar_events::actions::find_event_task_id::FindEventTaskId;
 use crate::features::calendar_events::actions::finish_running_event::FinishRunningEvent;
 use crate::features::tasks::actions::complete_task_in_transaction::CompleteTaskInTransaction;
@@ -16,6 +18,7 @@ pub struct FinishRunningItem<'a> {
     lock_group_of_task: LockGroupOfTask,
     finish_running_event: FinishRunningEvent,
     complete_task_in_transaction: CompleteTaskInTransaction,
+    record_activity: RecordActivity,
 }
 
 impl<'a> FinishRunningItem<'a> {
@@ -26,6 +29,7 @@ impl<'a> FinishRunningItem<'a> {
             lock_group_of_task: LockGroupOfTask::new(),
             finish_running_event: FinishRunningEvent::new(),
             complete_task_in_transaction: CompleteTaskInTransaction::new(),
+            record_activity: RecordActivity::new(),
         }
     }
 
@@ -77,6 +81,28 @@ impl<'a> FinishRunningItem<'a> {
             ),
             None => None,
         };
+        if let (Some((activity_subject, tracked_subject)), Some(ends_at)) =
+            (finished_event.activity_subject(), finished_event.ends_at)
+        {
+            self.record_activity
+                .execute(
+                    &mut *finish_transaction,
+                    NewActivityEntry {
+                        user_id,
+                        occurred_at: now,
+                        subject: activity_subject,
+                        details: ActivityDetails::finished(
+                            tracked_subject,
+                            finished_event.id,
+                            finished_event.starts_at,
+                            ends_at,
+                            now,
+                            marked_task_id.is_some(),
+                        ),
+                    },
+                )
+                .await?;
+        }
         finish_transaction.commit().await?;
         Ok(FinishedItem {
             event: finished_event,

@@ -74,6 +74,7 @@ impl FireCardTrigger {
                 &move_cause,
             )
             .await
+            .map(|recorded_card_move| recorded_card_move.is_some())
     }
 }
 

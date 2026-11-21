@@ -71,6 +71,13 @@ pub struct NewCardMove<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordedCardMove {
+    pub user_id: Uuid,
+    pub from_list_name: Option<String>,
+    pub to_list_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardMove {
     pub id: Uuid,
     pub moved_at: UtcInstant,

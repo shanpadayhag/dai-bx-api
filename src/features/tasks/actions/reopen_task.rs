@@ -3,6 +3,10 @@ use uuid::Uuid;
 
 use crate::core::request_time_zone::RequestTimeZone;
 use crate::core::utc_instant::UtcInstant;
+use crate::features::activity::actions::record_activity::RecordActivity;
+use crate::features::activity::entities::activity_entry::{
+    ActivityDetails, ActivitySubject, NewActivityEntry,
+};
 use crate::features::task_groups::actions::find_uncheck_cutoffs::FindUncheckCutoffs;
 use crate::features::tasks::actions::lock_group_of_task::LockGroupOfTask;
 use crate::features::tasks::data_sources::postgres::task_source::PostgresTaskSource;
@@ -14,6 +18,7 @@ pub struct ReopenTask<'a> {
     lock_group_of_task: LockGroupOfTask,
     find_uncheck_cutoffs: FindUncheckCutoffs,
     postgres_task_source: PostgresTaskSource,
+    record_activity: RecordActivity,
 }
 
 impl<'a> ReopenTask<'a> {
@@ -23,6 +28,7 @@ impl<'a> ReopenTask<'a> {
             lock_group_of_task: LockGroupOfTask::new(),
             find_uncheck_cutoffs: FindUncheckCutoffs::new(),
             postgres_task_source: PostgresTaskSource,
+            record_activity: RecordActivity::new(),
         }
     }
 
@@ -57,6 +63,21 @@ impl<'a> ReopenTask<'a> {
                 &mut *reopen_transaction,
                 task_group_details.id,
                 uncheck_cutoff_millis,
+            )
+            .await?;
+        self.record_activity
+            .execute(
+                &mut *reopen_transaction,
+                NewActivityEntry {
+                    user_id,
+                    occurred_at: now,
+                    subject: ActivitySubject::Task(task_id),
+                    details: ActivityDetails::TaskReopened {
+                        is_subtask: group_tasks
+                            .iter()
+                            .any(|task| task.id == task_id && task.parent_id.is_some()),
+                    },
+                },
             )
             .await?;
         reopen_transaction.commit().await?;

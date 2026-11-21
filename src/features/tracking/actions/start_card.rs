@@ -2,6 +2,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::core::utc_instant::UtcInstant;
+use crate::features::activity::actions::record_activity::RecordActivity;
+use crate::features::activity::entities::activity_entry::{
+    ActivityDetails, ActivitySubject, NewActivityEntry, TrackedSubject as ActivityTrackedSubject,
+};
 use crate::features::calendar_events::actions::open_running_event::OpenRunningEvent;
 use crate::features::calendar_events::entities::calendar_event::{
     NewRunningEvent, RunningItem, TrackedSubject,
@@ -17,6 +21,7 @@ pub struct StartCard<'a> {
     lock_board_of_card: LockBoardOfCard,
     find_card_title: FindCardTitle,
     open_running_event: OpenRunningEvent,
+    record_activity: RecordActivity,
     fire_card_trigger: FireCardTrigger,
 }
 
@@ -27,6 +32,7 @@ impl<'a> StartCard<'a> {
             lock_board_of_card: LockBoardOfCard::new(),
             find_card_title: FindCardTitle::new(),
             open_running_event: OpenRunningEvent::new(),
+            record_activity: RecordActivity::new(),
             fire_card_trigger: FireCardTrigger::new(),
         }
     }
@@ -54,6 +60,20 @@ impl<'a> StartCard<'a> {
                     user_id,
                     title: card_title,
                     subject: TrackedSubject::Card(card_id),
+                },
+            )
+            .await?;
+        self.record_activity
+            .execute(
+                &mut *start_transaction,
+                NewActivityEntry {
+                    user_id,
+                    occurred_at: now,
+                    subject: ActivitySubject::Card(card_id),
+                    details: ActivityDetails::Started {
+                        subject: ActivityTrackedSubject::Card,
+                        event_id: running_item.event.id.to_string(),
+                    },
                 },
             )
             .await?;

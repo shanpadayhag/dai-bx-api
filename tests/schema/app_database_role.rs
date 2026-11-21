@@ -68,7 +68,7 @@ async fn every_app_table_is_open_to_the_app_role(db_pool: PgPool) {
         "SELECT app_table.tablename::text
          FROM pg_tables AS app_table
          WHERE app_table.schemaname = 'public'
-           AND app_table.tablename NOT IN ('_sqlx_migrations', 'security_events')
+           AND app_table.tablename NOT IN ('_sqlx_migrations', 'security_events', 'activity_entries')
            AND NOT (
                has_table_privilege('daibx_app', quote_ident(app_table.tablename), 'SELECT')
                AND has_table_privilege('daibx_app', quote_ident(app_table.tablename), 'INSERT')

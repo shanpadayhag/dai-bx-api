@@ -1,2 +1,2 @@
-mod accept;
+pub mod accept;
 pub mod proposal;

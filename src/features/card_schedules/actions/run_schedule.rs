@@ -1,6 +1,10 @@
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use crate::features::activity::actions::record_activity::RecordActivity;
+use crate::features::activity::entities::activity_entry::{
+    ActivityDetails, ActivitySubject, NewActivityEntry,
+};
 use crate::features::card_schedules::data_sources::postgres::card_schedule_source::PostgresCardScheduleSource;
 use crate::features::card_schedules::data_sources::postgres::schedule_run_source::PostgresScheduleRunSource;
 use crate::features::card_schedules::entities::card_schedule::CardSchedule;
@@ -16,6 +20,7 @@ pub struct RunSchedule {
     move_card_to_list_top: MoveCardToListTop,
     postgres_card_schedule_source: PostgresCardScheduleSource,
     postgres_schedule_run_source: PostgresScheduleRunSource,
+    record_activity: RecordActivity,
 }
 
 impl RunSchedule {
@@ -24,6 +29,7 @@ impl RunSchedule {
             move_card_to_list_top: MoveCardToListTop::new(),
             postgres_card_schedule_source: PostgresCardScheduleSource,
             postgres_schedule_run_source: PostgresScheduleRunSource,
+            record_activity: RecordActivity::new(),
         }
     }
 
@@ -51,7 +57,7 @@ impl RunSchedule {
             .insert(&mut *connection, &new_run)
             .await?;
         if is_inserted {
-            let is_moved = self
+            let recorded_card_move = self
                 .move_card_to_list_top
                 .execute(
                     &mut *connection,
@@ -61,11 +67,35 @@ impl RunSchedule {
                     &MoveCause::without_task(CardMoveReason::Schedule, run_request.now),
                 )
                 .await?;
-            if is_moved {
+            if recorded_card_move.is_some() {
                 self.postgres_schedule_run_source
                     .mark_moved(&mut *connection, new_run.id)
                     .await?;
             }
+            let (from_list_name, to_list_name) = recorded_card_move
+                .map(|recorded_card_move| {
+                    (
+                        recorded_card_move.from_list_name,
+                        recorded_card_move.to_list_name,
+                    )
+                })
+                .unwrap_or_default();
+            self.record_activity
+                .execute(
+                    &mut *connection,
+                    NewActivityEntry {
+                        user_id,
+                        occurred_at: run_request.now,
+                        subject: ActivitySubject::Card(card_schedule.card_id),
+                        details: ActivityDetails::ScheduleRan {
+                            how: run_request.timing.as_str().to_owned(),
+                            moved: from_list_name.is_some() || to_list_name.is_some(),
+                            from_list_name,
+                            to_list_name,
+                        },
+                    },
+                )
+                .await?;
         }
         if run_request.timing == RunTiming::ByHand {
             return Ok(card_schedule);

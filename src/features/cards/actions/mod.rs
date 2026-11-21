@@ -12,6 +12,7 @@ pub mod list_archived_cards;
 pub mod lock_board_of_card;
 pub mod move_card;
 pub mod move_card_to_list_top;
+pub mod record_card_move;
 pub mod restore_card;
 pub mod save_card_triggers;
 pub mod set_card_value;

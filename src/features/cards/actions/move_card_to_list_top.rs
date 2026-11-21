@@ -1,23 +1,23 @@
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-use crate::features::cards::data_sources::postgres::card_move_source::PostgresCardMoveSource;
+use crate::features::cards::actions::record_card_move::RecordCardMove;
 use crate::features::cards::data_sources::postgres::card_source::PostgresCardSource;
 use crate::features::cards::entities::card::CardPlace;
-use crate::features::cards::entities::card_move::{MoveCause, NewCardMove};
+use crate::features::cards::entities::card_move::{MoveCause, NewCardMove, RecordedCardMove};
 use crate::features::cards::error::CardError;
 
 #[derive(Default)]
 pub struct MoveCardToListTop {
     postgres_card_source: PostgresCardSource,
-    postgres_card_move_source: PostgresCardMoveSource,
+    record_card_move: RecordCardMove,
 }
 
 impl MoveCardToListTop {
     pub fn new() -> Self {
         Self {
             postgres_card_source: PostgresCardSource,
-            postgres_card_move_source: PostgresCardMoveSource,
+            record_card_move: RecordCardMove::new(),
         }
     }
 
@@ -28,16 +28,16 @@ impl MoveCardToListTop {
         card_id: Uuid,
         target_list_id: Uuid,
         move_cause: &MoveCause,
-    ) -> Result<bool, CardError> {
+    ) -> Result<Option<RecordedCardMove>, CardError> {
         let Some(current_place) = self
             .postgres_card_source
             .find_place(&mut *connection, board_id, card_id)
             .await?
         else {
-            return Ok(false);
+            return Ok(None);
         };
         if current_place.list_id == target_list_id {
-            return Ok(false);
+            return Ok(None);
         }
         self.postgres_card_source
             .count_in_list(&mut *connection, board_id, target_list_id)
@@ -54,8 +54,8 @@ impl MoveCardToListTop {
                 },
             )
             .await?;
-        self.postgres_card_move_source
-            .record(
+        self.record_card_move
+            .execute(
                 &mut *connection,
                 &NewCardMove {
                     card_id,
@@ -64,8 +64,7 @@ impl MoveCardToListTop {
                     cause: move_cause,
                 },
             )
-            .await?;
-        Ok(true)
+            .await
     }
 }
 
@@ -124,8 +123,8 @@ mod tests {
             .await
             .expect("the commit should run");
 
-        assert!(first_move);
-        assert!(!second_move);
+        assert!(first_move.is_some());
+        assert!(second_move.is_none());
         assert_eq!(
             place_of(&db_pool, board_id, moving_card_id).await,
             CardPlace {

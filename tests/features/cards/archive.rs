@@ -44,7 +44,7 @@ pub async fn archive_card(db_pool: &PgPool, signed_in_person: &SignedInPerson, c
     );
 }
 
-async fn restore_card(
+pub async fn restore_card(
     db_pool: &PgPool,
     signed_in_person: &SignedInPerson,
     card_id: &str,

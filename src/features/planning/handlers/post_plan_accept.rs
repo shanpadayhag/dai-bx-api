@@ -31,15 +31,21 @@ pub async fn post_plan_accept(
         .into_iter()
         .map(PlanBlockRequest::into_plan_block)
         .collect::<Result<Vec<_>, _>>()?;
+    let now = UtcInstant::now();
     let created_events = AcceptPlan::new(&app_state.db_pool)
-        .execute(write_session.user_id, &accepted_blocks, &request_time_zone)
+        .execute(
+            write_session.user_id,
+            &accepted_blocks,
+            &request_time_zone,
+            now,
+        )
         .await?;
     let uncheck_cutoffs = FindLinkedTaskCutoffs::new(&app_state.db_pool)
         .execute(
             write_session.user_id,
             &created_events,
             &request_time_zone,
-            UtcInstant::now(),
+            now,
         )
         .await?;
     Ok((

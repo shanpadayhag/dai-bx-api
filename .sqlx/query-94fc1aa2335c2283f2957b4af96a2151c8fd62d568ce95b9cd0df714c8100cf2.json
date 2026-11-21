@@ -1,0 +1,123 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT activity_entries.id,\n                      (extract(epoch FROM activity_entries.occurred_at) * 1000)::bigint\n                          AS \"occurred_at_millis!\",\n                      activity_entries.kind,\n                      activity_entries.task_id,\n                      activity_entries.card_id,\n                      cards.board_id AS \"board_id?\",\n                      activity_entries.title,\n                      activity_entries.context_name,\n                      activity_entries.details\n               FROM activity_entries\n               LEFT JOIN cards ON cards.id = activity_entries.card_id\n               WHERE activity_entries.user_id = $1\n                 AND ($2::bigint IS NULL\n                      OR activity_entries.occurred_at\n                          >= 'epoch'::timestamptz + $2::bigint * interval '1 millisecond')\n                 AND ($3::bigint IS NULL\n                      OR (activity_entries.occurred_at, activity_entries.id)\n                          < ('epoch'::timestamptz + $3::bigint * interval '1 millisecond', $4::uuid))\n               ORDER BY activity_entries.occurred_at DESC, activity_entries.id DESC\n               LIMIT $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "activity_entries",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "occurred_at_millis!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "activity_entries",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "task_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "activity_entries",
+            "name": "task_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "card_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "activity_entries",
+            "name": "card_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "board_id?",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cards",
+            "name": "board_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "activity_entries",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "context_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "activity_entries",
+            "name": "context_name"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "details",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "activity_entries",
+            "name": "details"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "94fc1aa2335c2283f2957b4af96a2151c8fd62d568ce95b9cd0df714c8100cf2"
+}

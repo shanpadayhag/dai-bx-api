@@ -9,7 +9,7 @@ use crate::planning::proposal::{group_with_tasks, iso_after, planning_person, pr
 use crate::support::{SignedInPerson, build_test_app, post_json_with_cookies, response_json};
 use crate::tasks::create::{add_task, task_id_named};
 
-async fn post_accept(
+pub async fn post_accept(
     db_pool: &PgPool,
     signed_in_person: &SignedInPerson,
     request_body: Value,
@@ -23,7 +23,7 @@ async fn post_accept(
     .await
 }
 
-fn block(task_id: &str, starts_at: &str, ends_at: &str) -> Value {
+pub fn block(task_id: &str, starts_at: &str, ends_at: &str) -> Value {
     json!({ "taskId": task_id, "startsAt": starts_at, "endsAt": ends_at })
 }
 

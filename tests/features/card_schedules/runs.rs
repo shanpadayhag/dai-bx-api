@@ -27,7 +27,7 @@ async fn post_run_now(
     .await
 }
 
-async fn run_now(
+pub async fn run_now(
     db_pool: &PgPool,
     signed_in_person: &SignedInPerson,
     schedule_id: &str,
