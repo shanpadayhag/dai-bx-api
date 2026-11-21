@@ -1,6 +1,6 @@
 # GDPR notes
 
-What personal data DaiBX holds, why, where, for how long, and how it's deleted. This covers everything stored through milestone 5d (api v1.6.0): accounts and sign-in, tasks, the board, the calendar, time tracking, schedules, sign-in alerts. DaiBX keeps no backups of its own. The final terms and privacy policy are written in milestone 12. What to do if data is lost or exposed is in `breach-procedure.md`.
+What personal data DaiBX holds, why, where, for how long, and how it's deleted. This covers everything stored through milestone 5d (api v1.6.0): accounts and sign-in, tasks, the board, the calendar, time tracking, schedules, sign-in alerts, and notifications from milestone 8 (api v1.9.0). DaiBX keeps no backups of its own. The final terms and privacy policy are written in milestone 12. What to do if data is lost or exposed is in `breach-procedure.md`.
 
 ## Who holds the data
 
@@ -12,6 +12,7 @@ DaiBX is run by its owner, Shan Padayhag, as an invite-only personal service. Th
 | AWS Lambda | runs the API and the minute scheduler; keeps their logs in CloudWatch | Singapore (ap-southeast-1) |
 | Vercel | serves the web app and forwards `/backend` requests to the API | its global edge network; requests pass through and Vercel keeps its own short-lived request logs |
 | Google (Gmail SMTP) | sends every DaiBX email: verification, reset and email-change links, and sign-in alerts | Google's infrastructure; it stays the sender while DaiBX has no domain of its own |
+| Browser push services (Apple, Google, Mozilla, Microsoft) | deliver notifications to each device a person turned them on for; the device's browser decides which service | their own infrastructure; each message is encrypted for the device (`aes128gcm`), so the service sees only its size, time to live and urgency, never the text |
 | Have I Been Pwned | checks new passwords against known breaches | receives only the first 5 characters of the password's SHA-1, padded, never the password or any account detail |
 
 ## What's stored, and why
@@ -30,6 +31,8 @@ Data minimisation: each item exists because a feature needs it, and nothing is c
 | The calendar: events with titles, notes, times, repeats and their exceptions | the calendar the person keeps | contract |
 | Time tracking: when a task or card was started, paused and finished, kept as calendar events | showing where the person's time went | contract |
 | Card schedules, card triggers and group schedules, with a log of each run | creating and moving cards on the person's schedule | contract |
+| Notification devices: the browser's push address and encryption keys, a device name, its time zone, when it was added and last reached, and the session that added it | sending notifications to that device, and the device list in Settings | contract: the person turns them on per device |
+| Notification switches and notification deliveries: which item went to which device, and when it was due | sending only the kinds the person chose, each once | contract |
 | Terms version and when it was shown | recording what the person was shown at sign-up (`users.terms_version`, `users.terms_presented_at`) | accountability: being able to show what each person saw |
 | Sessions: IP address, browser user agent, created and last-seen times | keeping the person signed in, and the device list in Settings | contract; legitimate interest in account security |
 | Remembered devices: browser user agent and dates | skipping the code step on a trusted browser for 30 days | contract |
@@ -67,6 +70,8 @@ The security log never holds passwords, tokens, codes, secrets or email addresse
 | Tasks, board, calendar, time tracking, schedules and their run logs | the person deletes them, or deletes the account |
 | Session tokens, code steps, email links, remembered devices, throttle counters, unused invites | they expire (between 5 minutes and 30 days), then deleted by the daily purge |
 | Known browsers | 1 year after the browser was last seen, then deleted by the daily purge |
+| Notification devices | removed in Settings, the session that added it is ended (sign-out or ended from Settings), the push service reports it gone, or the account is deleted |
+| Notification deliveries | 2 days, then deleted by the scheduler |
 | Pending sign-in alerts | sent, then deleted; one that still can't be sent after an hour is deleted and recorded in the security log as failed |
 | Security log | 12 months, then deleted by the daily purge |
 | Lambda and scheduler logs in CloudWatch | 90 days in production, 30 in development |
@@ -76,7 +81,7 @@ The purge is `purge_expired_auth_data()`, which runs daily at 03:17 UTC through 
 ## Erasure
 
 Deleting an account (Settings, then the password, a code and the words "delete my account") is immediate and complete, in one database transaction:
-- the account row and everything it owns is deleted: sessions, tokens, devices, known browsers, pending alerts, recovery codes, email links, code steps, and every task, board, card, calendar event, time entry and schedule;
+- the account row and everything it owns is deleted: sessions, tokens, devices, notification devices and deliveries, known browsers, pending alerts, recovery codes, email links, code steps, and every task, board, card, calendar event, time entry and schedule;
 - an invite the person used stays, but no longer points to them;
 - the security log keeps its rows, and an `account_deleted` row is added. With the account gone, its `security_ref` matches nothing, so the rows can't be tied back to the person. They're deleted after 12 months like any other.
 
