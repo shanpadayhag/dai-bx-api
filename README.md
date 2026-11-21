@@ -231,6 +231,7 @@ cargo sqlx prepare -- --all-targets
 - [x] Group schedules and repeat follow-ups
 - [x] Security catch-up: sign-in alerts, email limits and an ASVS Level 2 check of everything live
 - [x] Automatic scheduling: task priority, due dates and plan-between windows, planning hours, plans proposed and accepted, and planned events linked to tasks
+- [x] Today and activity: an append-only activity log written by every start, finish, check-in, tick, card move, schedule run and accepted plan, and an Up next list of today's planned and due tasks
 
 See the [open issues](https://github.com/shanpadayhag/dai-bx-api/issues) for a full list of proposed features and known issues.
 
