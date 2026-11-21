@@ -8,6 +8,7 @@ mod card_triggers_schema;
 mod data_api_exposure;
 mod group_schedules_schema;
 mod invite_operator_role;
+mod notifications_schema;
 mod planning_schema;
 mod purge_expired_auth_data;
 mod support;

@@ -18,6 +18,8 @@ pub const EMAIL_CAP_LIMIT: i32 = 100;
 pub const EMAIL_CAP_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 pub const WRITE_LIMIT: i32 = 600;
 pub const WRITE_WINDOW_SECONDS: i64 = 10 * 60;
+pub const TEST_PUSH_LIMIT: i32 = 5;
+pub const TEST_PUSH_WINDOW_SECONDS: i64 = 60 * 60;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThrottleScope {
@@ -59,6 +61,10 @@ pub fn email_request_ip_key(client_ip: IpAddr) -> String {
 
 pub fn write_key(user_id: Uuid) -> String {
     format!("write:{user_id}")
+}
+
+pub fn test_push_key(device_id: Uuid) -> String {
+    format!("test_push:{device_id}")
 }
 
 pub fn account_ip_block_seconds(failure_count: i32) -> Option<i64> {

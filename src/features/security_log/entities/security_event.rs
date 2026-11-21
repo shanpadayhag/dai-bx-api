@@ -30,6 +30,8 @@ pub enum SecurityEventType {
     SignInAlertSent,
     SignInAlertFailed,
     EmailCapReached,
+    PushDeviceAdded,
+    PushDeviceRemoved,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

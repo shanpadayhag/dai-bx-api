@@ -18,7 +18,8 @@ use crate::core::middlewares::response_headers::add_response_headers;
 use crate::core::state::AppState;
 use crate::features::{
     account, activity, auth, board_lists, board_properties, boards, calendar_events,
-    card_schedules, cards, categories, health, planning, task_groups, tasks, today, tracking,
+    card_schedules, cards, categories, health, notifications, planning, task_groups, tasks, today,
+    tracking,
 };
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -60,6 +61,7 @@ pub fn app(app_state: AppState) -> Router {
         .merge(cards::router::router())
         .merge(tasks::router::router())
         .merge(tracking::router::router())
+        .merge(notifications::router::router())
         .layer(middleware_stack)
         .with_state(app_state)
 }

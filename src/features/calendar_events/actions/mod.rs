@@ -11,6 +11,7 @@ pub mod find_event_task_id;
 pub mod find_linked_task_cutoffs;
 pub mod finish_running_event;
 pub mod list_calendar_events;
+pub mod list_planned_starts;
 pub mod list_running_items;
 pub mod open_running_event;
 pub mod rename_tracked_events;

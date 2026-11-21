@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT notify_check_ins AS check_ins,\n                      notify_schedule_runs AS schedule_runs,\n                      notify_blocks_starting AS blocks_starting,\n                      notify_quiet_outside_working_hours AS quiet_outside_working_hours\n               FROM users WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "check_ins",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_check_ins"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "schedule_runs",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_schedule_runs"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "blocks_starting",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_blocks_starting"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "quiet_outside_working_hours",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_quiet_outside_working_hours"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "afb7273689a80b8ab57078612ad92f24f0abaf26cf57e19acc5d929c58968f80"
+}

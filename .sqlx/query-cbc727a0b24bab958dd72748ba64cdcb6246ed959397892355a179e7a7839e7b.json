@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT users.id,\n                      users.notify_check_ins,\n                      users.notify_schedule_runs,\n                      users.notify_blocks_starting,\n                      users.notify_quiet_outside_working_hours,\n                      users.check_ins_enabled,\n                      users.check_in_interval_minutes,\n                      users.first_check_in_minutes,\n                      to_char(users.working_hours_start, 'HH24:MI') AS \"working_hours_start_text!\",\n                      to_char(users.working_hours_end, 'HH24:MI') AS \"working_hours_end_text!\",\n                      users.calendar_time_zone\n               FROM users\n               WHERE EXISTS (SELECT 1 FROM push_devices WHERE push_devices.user_id = users.id)\n               ORDER BY users.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "notify_check_ins",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_check_ins"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "notify_schedule_runs",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_schedule_runs"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "notify_blocks_starting",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_blocks_starting"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "notify_quiet_outside_working_hours",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_quiet_outside_working_hours"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "check_ins_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "check_ins_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "check_in_interval_minutes",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "check_in_interval_minutes"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "first_check_in_minutes",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "first_check_in_minutes"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "working_hours_start_text!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "working_hours_end_text!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "calendar_time_zone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "calendar_time_zone"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "cbc727a0b24bab958dd72748ba64cdcb6246ed959397892355a179e7a7839e7b"
+}

@@ -106,6 +106,10 @@ The code is organised by feature (`src/features/<feature>/`), each with its own 
    cp .env.example .env
    openssl rand -base64 32
    ```
+   Replace the `VAPID_PRIVATE_KEY` placeholder too. It signs web push notifications, and the browser keeps the matching public key, so changing it later means every device turns notifications on again.
+   ```sh
+   openssl ecparam -name prime256v1 -genkey -noout -outform DER | tail -c +8 | head -c 32 | base64 | tr '+/' '-_' | tr -d '=\n'
+   ```
 5. Start Mailpit in another terminal, so email tests have an inbox to deliver to:
    ```sh
    mailpit --smtp 127.0.0.1:1025 --listen 127.0.0.1:8025
@@ -159,6 +163,11 @@ curl http://localhost:9000/health
 | POST | `/account/authenticator/confirm` | `{"code"}` from the new app → `200 {"status":"authenticator_replaced"}`; ends the other sessions and every remembered device |
 | GET | `/account/time-tracking` | with a session → `200 {"checkInsEnabled","checkInIntervalMinutes","firstCheckInMinutes","workingHoursStart","workingHoursEnd","trackedCategoryId","calendarTimeZone","planningHours"}`; `calendarTimeZone` is `null` while the calendar follows the device, and `planningHours` is `null` while planning follows working hours, otherwise seven days, Monday first, each `null` (off) or `{"start","end"}` |
 | PATCH | `/account/time-tracking` | any of those fields → `200` with the saved settings; `"calendarTimeZone": null` goes back to the device zone and `"planningHours": null` back to working hours; `422` for check-ins outside 5–240 minutes, a time not like `09:30` or an unknown time zone; `404` for an unknown category |
+| GET | `/account/notifications` | with a session → `200 {"applicationServerKey","checkIns","scheduleRuns","blocksStarting","quietOutsideWorkingHours","devices":[{"id","deviceName","createdAt","lastDeliveredAt"}]}` |
+| PATCH | `/account/notifications` | any of `{"checkIns","scheduleRuns","blocksStarting","quietOutsideWorkingHours"}` → `200` with the saved settings |
+| POST | `/push-devices` | `{"endpoint","keys":{"p256dh","auth"},"deviceName","timeZone"}` from the browser's push subscription → `201` with the device, `200` when this endpoint was already registered; `422` for an endpoint outside Apple, Google, Mozilla and Microsoft's push services; `409` past 10 devices |
+| DELETE | `/push-devices/{id}` | → `200 {"status":"deleted"}`; `404` for someone else's device |
+| POST | `/push-devices/{id}/test` | `{}` → `200 {"status":"sent"}` after the push service accepts a test notification; `410` when it no longer knows the device (which is removed), `502` when it refuses; `429` after 5 an hour per device |
 | POST | `/account/delete` | `{"password","code","confirmation":"delete my account"}` → `200 {"status":"account_deleted"}`; deletes everything the account owns |
 | POST | `/account/email/confirm` | `{"token"}`, no session needed → `200 {"status":"email_changed"}`; `422` for a used or expired link |
 
@@ -199,7 +208,7 @@ New passwords are checked against Have I Been Pwned's range API (only the first 
 ### Releases and housekeeping
 
 - Pushing to a `release/*` branch deploys the dev Lambda once CI passes. Pushing a `v1.*` tag deploys prod, once CI passes on the tagged commit. Each environment has its own Supabase project, Lambda, deploy role and secrets.
-- Card schedules and idle-card archiving run in a second Lambda, `daibx-scheduler`, which EventBridge Scheduler calls every minute; each call runs the due schedules, archives the cards left idle past their column's length, then sends any queued sign-in alerts. The deploys upload it next to the API. [`docs/scheduler-setup.md`](docs/scheduler-setup.md) has the one-time setup per environment. Locally, run it with `cargo lambda watch --bin daibx-scheduler --env-file .env` and call it with `cargo lambda invoke daibx-scheduler --data-ascii '{}'`.
+- Card schedules and idle-card archiving run in a second Lambda, `daibx-scheduler`, which EventBridge Scheduler calls every minute; each call runs the due schedules, archives the cards left idle past their column's length, sends any queued sign-in alerts, then sends the notifications that came due in the last five minutes (check-ins, schedule runs and planned blocks starting) to every device that turned them on. The deploys upload it next to the API. [`docs/scheduler-setup.md`](docs/scheduler-setup.md) has the one-time setup per environment. Locally, run it with `cargo lambda watch --bin daibx-scheduler --env-file .env` and call it with `cargo lambda invoke daibx-scheduler --data-ascii '{}'`.
 - Expired sessions, tokens, challenges and old security events are deleted daily by `purge_expired_auth_data()`. Schedule it once per Supabase project by running `ops/schedule-purge.sql` as the database owner (in the SQL editor, or with `psql`). Re-running it replaces the schedule. `ops/check-purge.sql` shows the job and its last runs.
 - To end someone's sessions as the operator, run `psql "$DATABASE_URL" -v account_email='person@example.com' -f ops/end-account-sessions.sql`. `ops/end-all-sessions.sql` ends everyone's.
 

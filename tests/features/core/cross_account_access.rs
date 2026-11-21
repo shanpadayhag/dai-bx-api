@@ -15,6 +15,7 @@ use crate::card_schedules::create::{
     board_with_review_card, create_schedule, once_at, schedule_id, weekly_review,
 };
 use crate::categories::update::find_category_id;
+use crate::notifications::devices::register_device_id;
 use crate::support::{
     STRONG_PASSWORD, SignedInPerson, build_test_app, post_json_with_cookies, response_json, send,
     sign_up_with_authenticator,
@@ -51,6 +52,7 @@ struct AccountRecords {
     calendar_event_id: String,
     series_id: String,
     tracked_event_id: String,
+    device_id: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -133,6 +135,9 @@ fn app_routes() -> Vec<AppRoute> {
         any_session(Method::POST, "/account/sessions/end-all"),
         any_session(Method::GET, "/account/time-tracking"),
         any_session(Method::PATCH, "/account/time-tracking"),
+        any_session(Method::GET, "/account/notifications"),
+        any_session(Method::PATCH, "/account/notifications"),
+        any_session(Method::POST, "/push-devices"),
         any_session(Method::POST, "/account/delete"),
         any_session(Method::GET, "/activity"),
         any_session(Method::GET, "/today/up-next"),
@@ -304,6 +309,8 @@ fn app_routes() -> Vec<AppRoute> {
             "/tracking/{event_id}/finish",
             |_| json!({ "endsAt": minutes_from_now(1) }),
         ),
+        owned(Method::DELETE, "/push-devices/{device_id}"),
+        owned(Method::POST, "/push-devices/{device_id}/test"),
     ]
 }
 
@@ -325,6 +332,7 @@ fn filled_path(app_route: &AppRoute, records: &AccountRecords) -> String {
         .replace("{task_group_id}", &records.task_group_id)
         .replace("{task_id}", &records.task_id)
         .replace("{series_id}", &records.series_id)
+        .replace("{device_id}", &records.device_id)
         .replace("{original_start}", SERIES_FIRST_START)
         .replace("{event_id}", event_id);
     format!("{filled_template}{}", app_route.query)
@@ -387,6 +395,7 @@ async fn create_account_records(
     assert_eq!(series_response.status(), StatusCode::CREATED);
     let created_series = response_json(series_response).await;
     let running_item = start_task(db_pool, signed_in_person, &task_id).await;
+    let device_id = register_device_id(db_pool, signed_in_person, "private-phone").await;
     AccountRecords {
         board_id: board_id(&board).to_owned(),
         list_id: scheduled_card.to_do_list_id,
@@ -406,6 +415,7 @@ async fn create_account_records(
             .as_str()
             .expect("a tracked event id")
             .to_owned(),
+        device_id,
     }
 }
 

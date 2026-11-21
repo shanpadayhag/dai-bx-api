@@ -29,7 +29,9 @@
                 "account_deleted",
                 "sign_in_alert_sent",
                 "sign_in_alert_failed",
-                "email_cap_reached"
+                "email_cap_reached",
+                "push_device_added",
+                "push_device_removed"
               ]
             }
           }

@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO push_deliveries (device_id, user_id, kind, subject_key, due_at)\n               VALUES ($1, $2, $3, $4, 'epoch'::timestamptz + $5::bigint * interval '1 millisecond')\n               ON CONFLICT DO NOTHING\n               RETURNING 1 AS \"claimed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "claimed!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6fa98f0d5983d7eaf6b4bc19ca3a657269e245ffdbb8c74a110c95e547d8c2e5"
+}

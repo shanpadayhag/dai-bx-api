@@ -15,6 +15,10 @@ pub enum AppError {
     PayloadTooLarge(String),
     #[error("{0}")]
     Conflict(String),
+    #[error("{0}")]
+    Gone(String),
+    #[error("{0}")]
+    BadGateway(String),
     #[error("unauthorized")]
     Unauthorized,
     #[error("the email or password is incorrect")]
@@ -79,6 +83,10 @@ impl IntoResponse for AppError {
             }
             AppError::Conflict(conflict_message) => {
                 (StatusCode::CONFLICT, conflict_message.as_str())
+            }
+            AppError::Gone(gone_message) => (StatusCode::GONE, gone_message.as_str()),
+            AppError::BadGateway(bad_gateway_message) => {
+                (StatusCode::BAD_GATEWAY, bad_gateway_message.as_str())
             }
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
             AppError::InvalidCredentials => (

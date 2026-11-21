@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE push_devices\n               SET session_id = $2, p256dh = $3, auth_secret = $4, device_name = $5, time_zone = $6\n               WHERE id = $1\n               RETURNING id, user_id, endpoint, p256dh, auth_secret, device_name, time_zone,\n                         to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS \"created_at!\",\n                         to_char(last_delivered_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS last_delivered_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "push_devices",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "push_devices",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "endpoint",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "push_devices",
+            "name": "endpoint"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "p256dh",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "push_devices",
+            "name": "p256dh"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "auth_secret",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "push_devices",
+            "name": "auth_secret"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "device_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "push_devices",
+            "name": "device_name"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "time_zone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "push_devices",
+            "name": "time_zone"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_delivered_at",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "faa6e6431066d7c4535a2b1d8537d3ddfe8073ada5e8826785efff802657e6e5"
+}

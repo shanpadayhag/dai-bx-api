@@ -2,6 +2,7 @@ use std::env;
 
 use crate::core::config::origin_secret::{MIN_ORIGIN_SECRET_LENGTH, OriginSecret};
 use crate::core::config::smtp_settings::{SmtpSettings, SmtpSettingsError};
+use crate::core::config::vapid_settings::{VapidSettings, VapidSettingsError};
 use crate::core::security::totp_secret_cipher::{TotpKeyring, TotpKeyringError};
 
 pub const DEFAULT_HIBP_API_BASE_URL: &str = "https://api.pwnedpasswords.com";
@@ -18,6 +19,7 @@ pub struct AppConfig {
     pub open_signups: bool,
     pub terms_version: String,
     pub origin_secret: OriginSecret,
+    pub vapid_settings: VapidSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +40,8 @@ pub enum AppConfigError {
     TotpKeyring(#[from] TotpKeyringError),
     #[error(transparent)]
     Smtp(#[from] SmtpSettingsError),
+    #[error(transparent)]
+    Vapid(#[from] VapidSettingsError),
 }
 
 impl AppConfig {
@@ -67,6 +71,9 @@ impl AppConfig {
                 read_required_variable("ORIGIN_SECRET")?.trim().to_owned(),
             )
             .ok_or(AppConfigError::ShortOriginSecret)?,
+            vapid_settings: VapidSettings::from_variables(|variable_name| {
+                env::var(variable_name).ok()
+            })?,
         })
     }
 

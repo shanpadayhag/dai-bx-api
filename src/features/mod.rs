@@ -14,6 +14,7 @@ pub mod email_tokens;
 pub mod health;
 pub mod invites;
 pub mod known_browsers;
+pub mod notifications;
 pub mod password_policy;
 pub mod planning;
 pub mod recovery_codes;

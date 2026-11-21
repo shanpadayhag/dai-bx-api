@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\n               SET notify_check_ins = COALESCE($2, notify_check_ins),\n                   notify_schedule_runs = COALESCE($3, notify_schedule_runs),\n                   notify_blocks_starting = COALESCE($4, notify_blocks_starting),\n                   notify_quiet_outside_working_hours = COALESCE($5, notify_quiet_outside_working_hours)\n               WHERE id = $1\n               RETURNING notify_check_ins AS check_ins,\n                         notify_schedule_runs AS schedule_runs,\n                         notify_blocks_starting AS blocks_starting,\n                         notify_quiet_outside_working_hours AS quiet_outside_working_hours",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "check_ins",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_check_ins"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "schedule_runs",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_schedule_runs"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "blocks_starting",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_blocks_starting"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "quiet_outside_working_hours",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "notify_quiet_outside_working_hours"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2daa508f0f6c548bdf40c8d1e723825bfcbeb080a95f2351b579d31899f4eddb"
+}

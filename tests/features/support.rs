@@ -9,6 +9,7 @@ use daibx_api::app;
 use daibx_api::core::config::app_config::{AllowedOrigin, AppConfig};
 use daibx_api::core::config::origin_secret::OriginSecret;
 use daibx_api::core::config::smtp_settings::{SmtpSecurity, SmtpSettings};
+use daibx_api::core::config::vapid_settings::VapidSettings;
 use daibx_api::core::http_client::build_http_client;
 use daibx_api::core::logging::build_json_log_subscriber;
 use daibx_api::core::mail_transport::build_mail_transport;
@@ -45,6 +46,8 @@ pub const TEST_ORIGIN_SECRET: &str = "test-origin-secret-of-at-least-32-characte
 pub const STRONG_PASSWORD: &str = "violet lantern drifts past seven quiet docks";
 const TEST_TOTP_KEYS: &str = "v1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
 
+pub const TEST_VAPID_PRIVATE_KEY: &str = "RS0WdYWWo1HajXg3NZR1olzCf31i-ZBGDkFyCs7j1jw";
+
 pub fn test_app_config() -> AppConfig {
     AppConfig {
         database_url: String::from("postgres://unused-in-tests"),
@@ -70,6 +73,11 @@ pub fn test_app_config() -> AppConfig {
         terms_version: String::from(TEST_TERMS_VERSION),
         origin_secret: OriginSecret::new(String::from(TEST_ORIGIN_SECRET))
             .expect("the test secret is long enough"),
+        vapid_settings: VapidSettings::from_private_key(
+            TEST_VAPID_PRIVATE_KEY,
+            String::from("https://dai-bx.vercel.app"),
+        )
+        .expect("the test VAPID key should parse"),
     }
 }
 

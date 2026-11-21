@@ -102,6 +102,11 @@ mod tests {
                 "0123456789abcdef0123456789abcdef",
             ))
             .expect("the test secret is long enough"),
+            vapid_settings: crate::core::config::vapid_settings::VapidSettings::from_private_key(
+                "RS0WdYWWo1HajXg3NZR1olzCf31i-ZBGDkFyCs7j1jw",
+                String::from("https://dai-bx.vercel.app"),
+            )
+            .expect("test VAPID key should parse"),
         }
     }
 

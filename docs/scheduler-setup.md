@@ -159,3 +159,31 @@ aws lambda get-function-configuration --function-name daibx-scheduler-<env> --qu
 ```
 
 The timeout must be at least 60. Alerts run last in each call and start no new send after 20 seconds.
+
+## 9. Give it the web push key
+
+The scheduler sends notifications, so it needs `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, the same values as `daibx-api-<env>`. The API won't start without them, so set them on the API first, then copy them over before deploying a version that sends notifications. Without them, everything else keeps running and each cold start logs `notifications are off until the VAPID settings are set`.
+
+Each environment has its own key. Make one with:
+
+```sh
+openssl ecparam -name prime256v1 -genkey -noout -outform DER | tail -c +8 | head -c 32 | base64 | tr '+/' '-_' | tr -d '=\n'
+```
+
+Never change a live key: browsers keep the matching public key, so every device would have to turn notifications on again. Copy the values the same way as the mail settings, with the pattern `^(VAPID_PRIVATE_KEY|VAPID_SUBJECT)$`:
+
+```sh
+umask 077
+aws lambda get-function-configuration --function-name daibx-api-<env> \
+  --query 'Environment.Variables' > api-env.json
+aws lambda get-function-configuration --function-name daibx-scheduler-<env> \
+  --query 'Environment.Variables' > scheduler-env.json
+jq -s '{Variables: (.[1] + (.[0] | with_entries(select(.key | test("^(VAPID_PRIVATE_KEY|VAPID_SUBJECT)$")))))}' \
+  api-env.json scheduler-env.json > scheduler-env-next.json
+aws lambda update-function-configuration --function-name daibx-scheduler-<env> \
+  --environment file://scheduler-env-next.json --query 'LastUpdateStatus'
+rm api-env.json scheduler-env.json scheduler-env-next.json
+aws lambda wait function-updated-v2 --function-name daibx-scheduler-<env>
+```
+
+Notifications run last in each call: at most 500 sends, 8 at a time, each with a 5-second timeout.

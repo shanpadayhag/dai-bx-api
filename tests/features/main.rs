@@ -11,6 +11,7 @@ pub mod categories;
 mod core;
 mod health;
 mod invites;
+pub mod notifications;
 pub mod planning;
 mod support;
 pub mod task_groups;

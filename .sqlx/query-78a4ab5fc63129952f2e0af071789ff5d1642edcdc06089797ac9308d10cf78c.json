@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM push_deliveries\n             WHERE sent_at < 'epoch'::timestamptz + $1::bigint * interval '1 millisecond'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "78a4ab5fc63129952f2e0af071789ff5d1642edcdc06089797ac9308d10cf78c"
+}
