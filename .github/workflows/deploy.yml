@@ -1,7 +1,16 @@
-name: Deploy prod
+name: Deploy
 
 on:
   workflow_call:
+    inputs:
+      environment:
+        description: dev or prod
+        required: true
+        type: string
+      function-url:
+        description: The API function URL, ending in a slash
+        required: true
+        type: string
     secrets:
       DATABASE_URL:
         required: false
@@ -10,42 +19,26 @@ permissions:
   contents: read
   id-token: write
 
-concurrency:
-  group: deploy-prod
-  cancel-in-progress: false
-
 env:
-  CARGO_TERM_COLOR: always
   AWS_REGION: ap-southeast-1
-  FUNCTION_NAME: daibx-api-prod
-  SCHEDULER_FUNCTION_NAME: daibx-scheduler-prod
-  DEPLOY_ROLE_ARN: arn:aws:iam::566252491895:role/daibx-api-prod-deploy
-  FUNCTION_URL: https://feezjo6k7aw7kbbtgqhgojacre0menau.lambda-url.ap-southeast-1.on.aws/
+  FUNCTION_NAME: daibx-api-${{ inputs.environment }}
+  SCHEDULER_FUNCTION_NAME: daibx-scheduler-${{ inputs.environment }}
+  DEPLOY_ROLE_ARN: arn:aws:iam::566252491895:role/daibx-api-${{ inputs.environment }}-deploy
+  FUNCTION_URL: ${{ inputs.function-url }}
   SQLX_CLI_VERSION: 0.9.0
 
 jobs:
   deploy:
-    name: Migrate, build and deploy
+    name: Migrate and deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: prod
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
-        with:
-          toolchain: "1.99"
-          targets: aarch64-unknown-linux-gnu
-
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.13"
-
-      - name: Install cargo-lambda
-        run: pip install cargo-lambda==1.9.2
 
       - name: Cache sqlx-cli
         id: sqlx-cli-cache
@@ -53,6 +46,11 @@ jobs:
         with:
           path: ~/.cargo/bin/sqlx
           key: sqlx-cli-${{ env.SQLX_CLI_VERSION }}-${{ runner.os }}
+
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        if: steps.sqlx-cli-cache.outputs.cache-hit != 'true'
+        with:
+          toolchain: "1.99"
 
       - name: Install sqlx-cli
         if: steps.sqlx-cli-cache.outputs.cache-hit != 'true'
@@ -62,17 +60,13 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          if [ -d migrations ]; then
-            source ops/verified-database-url.sh
-            DATABASE_URL="$(verified_database_url "$DATABASE_URL")" sqlx migrate run
-          else
-            echo "No migrations yet"
-          fi
+          source ops/verified-database-url.sh
+          DATABASE_URL="$(verified_database_url "$DATABASE_URL")" sqlx migrate run
 
-      - name: Build
-        env:
-          SQLX_OFFLINE: "true"
-        run: cargo lambda build --release --arm64 --output-format zip --bin daibx-api --bin daibx-scheduler
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: daibx-lambdas
+          path: dist
 
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
@@ -83,12 +77,12 @@ jobs:
         run: |
           aws lambda update-function-code \
             --function-name "$FUNCTION_NAME" \
-            --zip-file fileb://target/lambda/daibx-api/bootstrap.zip \
+            --zip-file fileb://dist/daibx-api/bootstrap.zip \
             --query LastUpdateStatus --output text
           aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
           aws lambda update-function-code \
             --function-name "$SCHEDULER_FUNCTION_NAME" \
-            --zip-file fileb://target/lambda/daibx-scheduler/bootstrap.zip \
+            --zip-file fileb://dist/daibx-scheduler/bootstrap.zip \
             --query LastUpdateStatus --output text
           aws lambda wait function-updated-v2 --function-name "$SCHEDULER_FUNCTION_NAME"
 

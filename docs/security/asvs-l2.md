@@ -454,7 +454,7 @@ Logs go nowhere else: no third-party log service, no email of log content. The A
 | 13.3.1 | 2 | Backend secrets live in a secrets manager | Met, documented deviation (D2) | secrets are kept in encrypted Lambda settings and GitHub secrets, outside the code and build output, rather than in a separate vault. Accepted by the owner on 2026-11-18, to be revisited when anyone else gets AWS access |
 | 13.3.2 | 2 | Access to secrets follows least privilege | Met | each function holds only its own settings (`docs/scheduler-setup.md`), and its AWS role can only write logs |
 | 13.4.1 | 1 | Source control metadata isn't deployed or reachable | Met | a compiled binary and the Next.js build are deployed; `/.git/config` returned 404 on 2026-11-18 |
-| 13.4.2 | 2 | Debug modes are off in production | Met | release builds: `.github/workflows/deploy-prod.yml` |
+| 13.4.2 | 2 | Debug modes are off in production | Met | release builds: the `build` job in `.github/workflows/ci.yml` |
 | 13.4.3 | 2 | Directory listings aren't exposed | Met | neither host serves directories |
 | 13.4.4 | 2 | HTTP TRACE isn't supported | Met | returned 405 on 2026-11-18 |
 | 13.4.5 | 2 | Documentation and monitoring endpoints aren't exposed | Met | API docs and metrics paths returned 404 on 2026-11-18; `/health` says only `ok` |
@@ -482,7 +482,7 @@ Logs go nowhere else: no third-party log service, no email of log content. The A
 | 15.1.3 | 2 | Resource-heavy functions are documented | Met | "Resource-heavy functions" above |
 | 15.2.1 | 1 | Components are within their update time frames | Met | CI fails on known issues: `.github/workflows/ci.yml`, `.cargo/audit.toml`, `web:audit-ignore.json` |
 | 15.2.2 | 2 | Resource-heavy functions are protected | Met | request timeout and body limit (`src/lib.rs`), write limit (`src/features/throttling/entities/write_session.rs`), sign-in limits (`src/features/throttling/entities/throttle_attempt.rs`) |
-| 15.2.3 | 2 | Production has no test or development functions | Met | only the API and scheduler binaries are deployed: `.github/workflows/deploy-prod.yml` |
+| 15.2.3 | 2 | Production has no test or development functions | Met | only the API and scheduler binaries are built and deployed: `.github/workflows/ci.yml` and `.github/workflows/deploy.yml` |
 | 15.3.1 | 1 | Only the required fields are returned | Met | responses are explicit types, for example `src/features/cards/responses/card_detail_response.rs` |
 | 15.3.2 | 2 | Backend calls don't follow redirects unintentionally | Met | the HTTP client follows no redirects (F8); `refuses_a_redirect_without_following_it` in `src/features/password_policy/data_sources/hibp/pwned_passwords_source.rs` |
 | 15.3.3 | 2 | Mass assignment is prevented | Met | each endpoint reads a fixed request type and updates named columns |

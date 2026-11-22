@@ -8,7 +8,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/heads/release/') && !startsWith(github.ref, 'refs/tags/') }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -92,13 +92,67 @@ jobs:
       - name: Audit dependencies
         run: cargo audit
 
+  build:
+    name: Build the Lambda release
+    if: startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/tags/v1.')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        with:
+          toolchain: "1.99"
+          targets: aarch64-unknown-linux-gnu
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: lambda-arm64-release
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Install cargo-lambda
+        run: pip install cargo-lambda==1.9.2
+
+      - name: Build
+        run: cargo lambda build --release --arm64 --output-format zip --bin daibx-api --bin daibx-scheduler
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: daibx-lambdas
+          path: |
+            target/lambda/daibx-api/bootstrap.zip
+            target/lambda/daibx-scheduler/bootstrap.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy-dev:
+    name: Deploy dev
+    needs: [check, audit, build]
+    if: startsWith(github.ref, 'refs/heads/release/')
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: dev
+      function-url: https://dzhamj3b55fxiw5iajytqeoiii0hfuki.lambda-url.ap-southeast-1.on.aws/
+    secrets:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
   deploy-prod:
     name: Deploy prod
-    needs: [check, audit]
+    needs: [check, audit, build]
     if: startsWith(github.ref, 'refs/tags/v1.')
     permissions:
       contents: read
       id-token: write
-    uses: ./.github/workflows/deploy-prod.yml
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: prod
+      function-url: https://feezjo6k7aw7kbbtgqhgojacre0menau.lambda-url.ap-southeast-1.on.aws/
     secrets:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
