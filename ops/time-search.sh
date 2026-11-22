@@ -2,7 +2,7 @@
 set -euo pipefail
 
 : "${SEARCH_API_URL:?set SEARCH_API_URL to the API address, for example http://localhost:9000}"
-: "${SEARCH_ACCESS_TOKEN:?set SEARCH_ACCESS_TOKEN to the seeded account's access token}"
+: "${SEARCH_ACCESS_TOKEN:?set SEARCH_ACCESS_TOKEN to the access token the seed was given}"
 
 search_parameters=(
   "q=plan" "q=review" "q=p" "q=re" "q=ch" "q=chinese" "q=vocab" "q=gym" "q=run" "q=meeting"
@@ -12,24 +12,31 @@ search_parameters=(
   "q=review&kind=groups&limit=50" "q=a&kind=cards&limit=50" "q=b" "q=c" "q=d" "q=te" "q=se"
 )
 
-origin_secret_header=()
-if [[ -n "${SEARCH_ORIGIN_SECRET:-}" ]]; then
-  origin_secret_header=(-H "x-daibx-origin-secret: ${SEARCH_ORIGIN_SECRET}")
-fi
+search_curl() {
+  if [[ -n "${SEARCH_ORIGIN_SECRET:-}" ]]; then
+    curl -H "x-daibx-origin-secret: ${SEARCH_ORIGIN_SECRET}" "$@"
+  else
+    curl "$@"
+  fi
+}
 
 request_times_file="$(mktemp)"
 trap 'rm -f "$request_times_file"' EXIT
 
-curl -s -o /dev/null "${origin_secret_header[@]}" \
+search_curl -s -o /dev/null \
   -H "Cookie: __Host-daibx_access=${SEARCH_ACCESS_TOKEN}" \
   "${SEARCH_API_URL}/search?q=warm"
+
+time_search() {
+  search_curl -s -o /dev/null -w '%{http_code} %{time_total}' \
+    -H "Cookie: __Host-daibx_access=${SEARCH_ACCESS_TOKEN}" \
+    "${SEARCH_API_URL}/search?$1"
+}
 
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 for round_number in 1 2 3; do
   for search_parameter in "${search_parameters[@]}"; do
-    response_line="$(curl -s -o /dev/null -w '%{http_code} %{time_total}' "${origin_secret_header[@]}" \
-      -H "Cookie: __Host-daibx_access=${SEARCH_ACCESS_TOKEN}" \
-      "${SEARCH_API_URL}/search?${search_parameter}")"
+    response_line="$(time_search "$search_parameter")"
     response_status="${response_line%% *}"
     if [[ "$response_status" != "200" ]]; then
       echo "round ${round_number}: ${search_parameter} answered ${response_status}" >&2
