@@ -11,5 +11,6 @@ mod invite_operator_role;
 mod notifications_schema;
 mod planning_schema;
 mod purge_expired_auth_data;
+mod search_schema;
 mod support;
 mod tasks_schema;

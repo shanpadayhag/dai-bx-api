@@ -13,6 +13,7 @@ mod health;
 mod invites;
 pub mod notifications;
 pub mod planning;
+mod search;
 mod support;
 pub mod task_groups;
 pub mod tasks;

@@ -2,7 +2,7 @@ use jiff::civil::DateTime;
 use uuid::Uuid;
 
 use crate::core::recurrence::{
-    RepeatRule, next_after, occurrences, parse_time_zone, to_instant, to_local,
+    RepeatRule, latest_at_or_before, next_after, occurrences, parse_time_zone, to_instant, to_local,
 };
 use crate::core::utc_instant::UtcInstant;
 use crate::features::calendar_events::entities::calendar_event::{
@@ -324,6 +324,62 @@ impl EventSeries {
         i64::from(self.duration_minutes) * MILLIS_PER_MINUTE
     }
 
+    pub fn nearest_occurrence_start(&self, now: UtcInstant) -> Option<UtcInstant> {
+        let series_zone = parse_time_zone(&self.time_zone)?;
+        let is_before_until = |occurrence_start: &UtcInstant| {
+            self.until_instant
+                .is_none_or(|until_instant| *occurrence_start < until_instant)
+        };
+        let skipped_start_limit = self.cancelled_starts.len() + 1;
+        let mut upcoming_start = next_after(
+            &self.repeat_rule,
+            self.local_start,
+            &series_zone,
+            UtcInstant::from_unix_millis(now.unix_millis() - self.duration_millis()),
+        );
+        for _ in 0..skipped_start_limit {
+            match upcoming_start {
+                Some(occurrence_start) if self.cancelled_starts.contains(&occurrence_start) => {
+                    upcoming_start = next_after(
+                        &self.repeat_rule,
+                        self.local_start,
+                        &series_zone,
+                        occurrence_start,
+                    );
+                }
+                _ => break,
+            }
+        }
+        if let Some(occurrence_start) = upcoming_start.filter(is_before_until)
+            && !self.cancelled_starts.contains(&occurrence_start)
+        {
+            return Some(occurrence_start);
+        }
+        let latest_allowed_start = self.until_instant.map_or(now, |until_instant| {
+            UtcInstant::from_unix_millis(until_instant.unix_millis() - 1).min(now)
+        });
+        let mut past_start = latest_at_or_before(
+            &self.repeat_rule,
+            self.local_start,
+            &series_zone,
+            latest_allowed_start,
+        );
+        for _ in 0..skipped_start_limit {
+            match past_start {
+                Some(occurrence_start) if self.cancelled_starts.contains(&occurrence_start) => {
+                    past_start = latest_at_or_before(
+                        &self.repeat_rule,
+                        self.local_start,
+                        &series_zone,
+                        UtcInstant::from_unix_millis(occurrence_start.unix_millis() - 1),
+                    );
+                }
+                _ => break,
+            }
+        }
+        past_start.filter(|occurrence_start| !self.cancelled_starts.contains(occurrence_start))
+    }
+
     pub fn occurrence_at(&self, occurrence_start: UtcInstant) -> CalendarEvent {
         CalendarEvent {
             id: self.id,
@@ -388,6 +444,56 @@ mod tests {
             .iter()
             .map(|listed_event| listed_event.starts_at.to_iso_text())
             .collect()
+    }
+
+    #[test]
+    fn nearest_occurrence_is_the_next_one_not_yet_ended() {
+        let series = daily_series();
+
+        assert_eq!(
+            series.nearest_occurrence_start(instant("2026-11-12T00:00:00Z")),
+            Some(instant("2026-11-12T23:00:00Z"))
+        );
+        assert_eq!(
+            series.nearest_occurrence_start(instant("2026-11-12T23:30:00Z")),
+            Some(instant("2026-11-12T23:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn nearest_occurrence_skips_cancelled_ones() {
+        let mut series = daily_series();
+        series.cancelled_starts = vec![
+            instant("2026-11-12T23:00:00Z"),
+            instant("2026-11-13T23:00:00Z"),
+        ];
+
+        assert_eq!(
+            series.nearest_occurrence_start(instant("2026-11-12T00:00:00Z")),
+            Some(instant("2026-11-14T23:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn nearest_occurrence_of_an_ended_series_is_its_last_one() {
+        let mut series = daily_series();
+        series.until_instant = Some(instant("2026-11-12T23:00:00Z"));
+        series.cancelled_starts = vec![instant("2026-11-11T23:00:00Z")];
+
+        assert_eq!(
+            series.nearest_occurrence_start(instant("2026-11-20T00:00:00Z")),
+            Some(instant("2026-11-10T23:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn nearest_occurrence_before_the_series_starts_is_its_first_one() {
+        let series = daily_series();
+
+        assert_eq!(
+            series.nearest_occurrence_start(instant("2026-11-01T00:00:00Z")),
+            Some(instant("2026-11-08T23:00:00Z"))
+        );
     }
 
     #[test]

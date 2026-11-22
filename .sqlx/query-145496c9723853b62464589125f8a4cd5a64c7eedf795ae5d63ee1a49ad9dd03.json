@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT task_groups.id,\n                      task_groups.name,\n                      (SELECT count(*) FROM tasks\n                       WHERE tasks.group_id = task_groups.id\n                         AND tasks.user_id = $1\n                         AND tasks.completed_at IS NULL) AS \"open_task_count!\"\n               FROM task_groups\n               WHERE task_groups.user_id = $1\n                 AND task_groups.search_vector @@ search_prefix_query($2)\n               ORDER BY ts_rank_cd(task_groups.search_vector, search_prefix_query($2)) DESC,\n                        task_groups.updated_at DESC,\n                        task_groups.id\n               LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "task_groups",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "task_groups",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "open_task_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "145496c9723853b62464589125f8a4cd5a64c7eedf795ae5d63ee1a49ad9dd03"
+}

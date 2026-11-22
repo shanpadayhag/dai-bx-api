@@ -1,0 +1,87 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH matched_tasks AS (\n                   SELECT tasks.id,\n                          tasks.name,\n                          tasks.group_id,\n                          tasks.parent_id,\n                          tasks.completed_at IS NOT NULL AS is_done,\n                          ts_rank_cd(tasks.search_vector, search_prefix_query($2)) AS match_rank,\n                          tasks.updated_at\n                   FROM tasks\n                   WHERE tasks.user_id = $1\n                     AND tasks.search_vector @@ search_prefix_query($2)\n                   ORDER BY is_done, match_rank DESC, tasks.updated_at DESC, tasks.id\n                   LIMIT $3\n               )\n               SELECT matched_tasks.id AS \"id!\",\n                      matched_tasks.name AS \"name!\",\n                      matched_tasks.group_id AS \"group_id!\",\n                      task_groups.name AS \"group_name!\",\n                      coalesce(\n                          (WITH RECURSIVE parent_tasks AS (\n                               SELECT tasks.id, tasks.parent_id, tasks.name, 1 AS parent_depth\n                               FROM tasks\n                               WHERE tasks.id = matched_tasks.parent_id AND tasks.user_id = $1\n                               UNION ALL\n                               SELECT tasks.id, tasks.parent_id, tasks.name, parent_tasks.parent_depth + 1\n                               FROM tasks\n                               JOIN parent_tasks ON tasks.id = parent_tasks.parent_id\n                               WHERE tasks.user_id = $1\n                           )\n                           SELECT array_agg(parent_tasks.name ORDER BY parent_tasks.parent_depth DESC)\n                           FROM parent_tasks),\n                          '{}'\n                      ) AS \"parent_names!\",\n                      matched_tasks.is_done AS \"is_done!\",\n                      EXISTS (\n                          SELECT 1 FROM calendar_events\n                          WHERE calendar_events.user_id = $1\n                            AND calendar_events.task_id = matched_tasks.id\n                            AND calendar_events.kind = 'tracked'\n                            AND calendar_events.ends_at IS NULL\n                      ) AS \"is_running!\"\n               FROM matched_tasks\n               JOIN task_groups\n                 ON task_groups.id = matched_tasks.group_id AND task_groups.user_id = $1\n               ORDER BY matched_tasks.is_done,\n                        matched_tasks.match_rank DESC,\n                        matched_tasks.updated_at DESC,\n                        matched_tasks.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tasks",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tasks",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "group_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tasks",
+            "name": "group_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "group_name!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "task_groups",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "parent_names!",
+        "type_info": "TextArray",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_done!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_running!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "647bce64d1adec94c27a22010564b1103be88b42e793c5c0b019359ee790d00c"
+}

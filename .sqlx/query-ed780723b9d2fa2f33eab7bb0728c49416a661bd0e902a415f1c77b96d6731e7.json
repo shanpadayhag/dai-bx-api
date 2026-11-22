@@ -1,0 +1,138 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT event_series.id,\n                      event_series.title,\n                      event_series.category_id,\n                      categories.color AS \"category_color?\",\n                      event_series.time_zone,\n                      to_char(event_series.local_start, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS \"local_start_text!\",\n                      event_series.duration_minutes,\n                      event_series.repeat_rule AS \"repeat_rule: Json<RepeatRule>\",\n                      (extract(epoch FROM event_series.until_instant) * 1000)::bigint AS until_instant_millis,\n                      coalesce(\n                          (SELECT array_agg((extract(epoch FROM event_exceptions.original_start) * 1000)::bigint\n                                            ORDER BY event_exceptions.original_start)\n                           FROM event_exceptions\n                           WHERE event_exceptions.series_id = event_series.id),\n                          '{}'\n                      ) AS \"cancelled_start_millis!\",\n                      event_series.schedule_id IS NOT NULL AS \"is_schedule_block!\",\n                      ts_rank_cd(event_series.search_vector, search_prefix_query($2)) AS \"match_rank!\"\n               FROM event_series\n               LEFT JOIN categories\n                 ON categories.id = event_series.category_id AND categories.user_id = $1\n               WHERE event_series.user_id = $1\n                 AND NOT event_series.hidden\n                 AND event_series.search_vector @@ search_prefix_query($2)\n               ORDER BY coalesce(\n                            event_series.until_instant\n                                <= 'epoch'::timestamptz + $3::bigint * interval '1 millisecond',\n                            false\n                        ),\n                        \"match_rank!\" DESC,\n                        event_series.updated_at DESC,\n                        event_series.id\n               LIMIT $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "category_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "category_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "category_color?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "categories",
+            "name": "color"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "time_zone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "time_zone"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "local_start_text!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "duration_minutes",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "duration_minutes"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "repeat_rule: Json<RepeatRule>",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "event_series",
+            "name": "repeat_rule"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "until_instant_millis",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "cancelled_start_millis!",
+        "type_info": "Int8Array",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_schedule_block!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 11,
+        "name": "match_rank!",
+        "type_info": "Float4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      null,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "ed780723b9d2fa2f33eab7bb0728c49416a661bd0e902a415f1c77b96d6731e7"
+}

@@ -19,6 +19,7 @@ pub mod password_policy;
 pub mod planning;
 pub mod recovery_codes;
 pub mod remembered_devices;
+pub mod search;
 pub mod security_log;
 pub mod sessions;
 pub mod sign_in_alerts;

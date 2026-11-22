@@ -141,6 +141,7 @@ fn app_routes() -> Vec<AppRoute> {
         any_session(Method::POST, "/account/delete"),
         any_session(Method::GET, "/activity"),
         any_session(Method::GET, "/today/up-next"),
+        any_session(Method::GET, "/search"),
         any_session(Method::GET, "/boards"),
         any_session(Method::POST, "/boards"),
         any_session(Method::GET, "/calendar/events"),
